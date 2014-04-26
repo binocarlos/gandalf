@@ -1,0 +1,28 @@
+{
+  "name": "gandalf",
+  "version": "0.0.0",
+  "description": "node.js oauth login wizard with leveldb session storage",
+  "main": "index.js",
+  "scripts": {
+    "test": "make test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/binocarlos/gandalf.git"
+  },
+  "keywords": [
+    "oauth",
+    "oauth2",
+    "login",
+    "password",
+    "session",
+    "leveldb",
+    "level"
+  ],
+  "author": "Kai Davenport",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/binocarlos/gandalf/issues"
+  },
+  "homepage": "https://github.com/binocarlos/gandalf"
+}
