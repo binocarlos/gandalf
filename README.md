@@ -35,17 +35,20 @@ gandalf.router(function(domain, done){
 })
 
 // return the api keys for a provider in one app (the string return by 'route')
-gandalf.apikeys(function(appid, provider, done){
-	if(provider=='facebook' && domain.match(/myapp\.com$/)){
+gandalf.virthost(function(domain, done){
+
+	db.loadInstallation(domain, function(err, installation){
 		done(null, {
-			key:process.env.FACEBOOK_KEY,
-			secret:process.env.FACEBOOK_SECRET
+			id:installation.id,
+			providers:{
+				facebook:{
+					id:installation.facebook_id,
+					secret:installation.facebook_secret
+				}
+			}		
 		})
-	}
-	else{
-		// we can load the keys async from an external database
-		databaseObject.getOauthKeys(appid, provider, done)
-	}
+	})
+	
 })
 
 // create a server and mount the handler anywhere you want

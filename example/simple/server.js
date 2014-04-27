@@ -1,13 +1,16 @@
 var http = require('http')
 var express = require('express')
-var Gandalf = require('gandalf')
-var db = require('level')('/tmp/gandalfdb')
+var level    = require('level-test')()
+var sublevel = require('level-sublevel')
+var Gandalf = require('../../')
+var ecstatic = require('ecstatic')
+var fs = require('fs')
+
+var db = sublevel(level('gandalf-examples--simple', {encoding: 'json'}))
 
 var gandalf = Gandalf(db, {
 	providers:['facebook']
 })
-
-gandalf.enable('google')
 
 // return an appid from a domain name - this enables virtual hosting
 gandalf.router(function(domain, done){
@@ -16,16 +19,10 @@ gandalf.router(function(domain, done){
 
 // return the api keys for a provider in one app (the string return by 'route')
 gandalf.apikeys(function(appid, provider, done){
-	if(provider=='facebook' && domain.match(/myapp\.com$/)){
-		done(null, {
-			key:process.env.FACEBOOK_KEY,
-			secret:process.env.FACEBOOK_SECRET
-		})
-	}
-	else{
-		// we can load the keys async from an external database
-		databaseObject.getOauthKeys(appid, provider, done)
-	}
+	done(null, {
+		id:process.env[provider.toUpperCase() + '_ID'],
+		secret:process.env[provider.toUpperCase() + '_SECRET']
+	})	
 })
 
 // create a server and mount the handler anywhere you want
@@ -46,27 +43,23 @@ app.use('/private', gandalf.protect(), function(req, res, next){
 		res.end(req.session.userid + ' is logged in')
 	})
 	
-	
 })
 
-// protect urls with a custom method
-app.use('/private2', gandalf.protect(function(method, appid, userid, done){
-
-	// method is GET, POST (i.e. HTTP method)
-
-	// run the callback with true or false to indicate access
-	done(null, true)
-
-}), function(req, res, next){
-
-	// all logged in users populate userid inside of the session
-	req.session.get('userid', function(err, userid){
-		res.end(req.session.userid + ' is logged in')
+// the logged in or not branch
+app.get('/', function(req, res){
+	res.setHeader('Content-Type', 'text/html')
+	req.session.get('userid', function(err, id){
+		if(!err && id){
+			fs.createReadStream(__dirname + '/www/admin.html').pipe(res)
+		}
+		else{
+			fs.createReadStream(__dirname + '/www/index.html').pipe(res)
+		}
 	})
-	
-	
 })
+
+app.use(ecstatic(__dirname + '/www'))
 
 server.listen(80, function(){
-
+	console.log('server listening');
 })

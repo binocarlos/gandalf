@@ -4,7 +4,7 @@
   "description": "node.js oauth login wizard with leveldb session storage",
   "main": "index.js",
   "scripts": {
-    "test": "make test"
+    "test": "set -e; for t in test/*.js; do node $t; done"
   },
   "repository": {
     "type": "git",
@@ -24,5 +24,21 @@
   "bugs": {
     "url": "https://github.com/binocarlos/gandalf/issues"
   },
-  "homepage": "https://github.com/binocarlos/gandalf"
+  "homepage": "https://github.com/binocarlos/gandalf",
+  "devDependencies": {
+    "ecstatic": "^0.5.1",
+    "level-sublevel": "^5.2.0",
+    "express": "^4.1.0",
+    "level-test": "^1.6.2",
+    "nightmare": "^0.1.7",
+    "tape": "^2.12.3",
+    "nightmare-tape": "0.0.1"
+  },
+  "dependencies": {
+    "routes": "^1.1.0",
+    "concat-stream": "^1.4.5",
+    "level-session": "^0.3.1",
+    "node-uuid": "^1.4.1",
+    "bcrypt": "^0.7.8"
+  }
 }

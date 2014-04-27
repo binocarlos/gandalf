@@ -1,9 +1,11 @@
+var url = require('url')
 var EventEmitter = require('events').EventEmitter
 var util = require('util')
 var Router = require('routes')
 var concat = require('concat-stream')
 var LevelSession = require('level-session')
 var Database = require('./database')
+
 
 // keep a log of the Provider classes
 var Providers = {}
@@ -36,12 +38,30 @@ function Gandalf(db, opts){
 	var self = this;
 	EventEmitter.call(this)
 
-	this._db = Database(db, opts)
-	this.opts = opts || {}
+	this._db = new Database(db, opts)
+	this.opts = opts || {
+		providers:{}
+	}
 
-	(opts.providers).forEach(function(name){
-		self.enable(name)
+	if(!this.opts.path){
+		throw new Error('path option required for Gandalf to start')
+	}
+
+	this._providers = {}
+
+	Object.keys(this.opts.providers || {}).forEach(function(key){
+	  self.enable(key)      
 	})
+	
+	this._db.on('batch', function(b){
+		self.emit('batch', b)
+	})
+
+	this._session = LevelSession({
+		db:db
+	})
+
+	this._httprouter = new Router()
 
 	this._addRoutes()
 }
@@ -53,81 +73,105 @@ module.exports = Gandalf
 // get a provider all hooked up with the keys
 Gandalf.prototype._makeProvider = function(req, done){
 	var self = this;
-	var Provider = ProviderFactory(req.params.provider)
-	this._router(req.headers.host, function(err, appid){
-		// first get the keys
-		self._apikeys(appid, name, function(err, keys){
-			if(err || !keys){
-				return done(err)
-			}
+	var Provider = Providers[req.params.provider]
 
-			if(!keys.id || !keys.secret){
-				return done('id and secret properties required in keys')
-			}
+	if(!Provider){
+		done('no provider for: ' + req.params.provider + ' found')
+	}
+	var config = req.installation.providers[req.params.provider]
 
-			var provider = Provider(keys)
+	if(Provider && config){
+		var provider = Provider(keys)
 
-			provider.once('auth', function(req, res, data){
-				self.connect(req, res, data)
-			})
-
-			done(null, provider)
+		provider.once('auth', function(req, res, data){
+			self.connect(req, res, data)
 		})
-	})
+
+		done(null, provider)
+	}
+	else{
+		done('no provider or config found')
+	}
 }
 
 Gandalf.prototype._addRoutes = function(name){
 	var self = this
-	this._httprouter = new Router()
+	
 	this._httprouter.addRoute('/register', methodFilter('post', function(req, res, match){
-		self._register(req, res)
+		self._registerHandler(req, res)
 	}))
 	this._httprouter.addRoute('/login', methodFilter('post', function(req, res, match){
-		self._login(req, res)
+		self._loginHandler(req, res)
 	}))
 	this._httprouter.addRoute('/logout', methodFilter('get', function(req, res, match){
-		self._logout(req, res)
+		self._logoutHandler(req, res)
 	}))
-	this._httprouter.addRoute('/status', methodFilter('get', function(req, res, match){
-		self._status(req, res)
+	this._httprouter.addRoute('/check', methodFilter('get', function(req, res, match){
+		self._checkHandler(req, res)
 	}))
 	this._httprouter.addRoute('/:provider', function(req, res, match){
-		self._provider(req, res)
+		self._providerHandler(req, res)
 	})
 }
 
-Gandalf.prototype.check_fns = function(name){
-	if(!this._router){
-		throw new Error('_router needed')
-	}
-	if(!this._apikeys){
-		throw new Error('_apikeys needed')
-	}
+Gandalf.prototype._checkHandler = function(req, res){
+	var self = this;
+	var query = url.parse(req.url).query
+
+	console.log('-------------------------------------------');
+	console.log('-------------------------------------------');
+	console.log('CHECK');
+	console.dir(query);
+	var installation = req.installation ? req.installation.id : 'default'
+	self._db.checkUsername(installation, 'local', query.username, function(err, ok){
+		res.end(ok ? 'ok' : 'notok')
+	})
 }
 
-Gandalf.prototype._register = function(req, res){
+Gandalf.prototype._registerHandler = function(req, res){
 	var self = this;
-	req.pipe(concat(function(body){
-		body = JSON.parse(body)
+	console.log('-------------------------------------------');
+	console.log('-------------------------------------------');
+	console.log('REGISTER');
+	var installationid = req.installation ? req.installation.id : 'default'
 
+	req.pipe(concat(function(body){
+		body = JSON.parse(body.toString())
+
+		console.dir(body);
 		var username = body.username
 		var password = body.password
 
-		self._db.usernameExists(username, function(err, exists){
-			if(exists){
+		console.log('-------------------------------------------');
+		console.log('check username');
+		console.dir(installationid);
+
+		self._db.checkUsername(installationid, 'local', username, function(err, ok){
+			console.log('-------------------------------------------');
+			console.log('results');
+			console.dir(err);
+			console.dir(ok);
+			if(!ok){
 				err = 'username already exists'
 			}
 			if(err){
 				res.statusCode = 500
-				res.end(err.toString())
+				res.end(ok ? 'ok' : 'notok')
 				return
 			}
 
-			delete(body.username)
 			delete(body.password)
 
-			self._db.registerUser(username, password, function(err, done){
-				self.emit('register', body)
+			console.log('-------------------------------------------');
+			console.log('register user');
+
+			self._db.registerUser(installationid, 'local', username, password, function(err, userid){
+
+				console.log('-------------------------------------------');
+				console.log('regisqterdd');
+				body.installationid = installationid
+				body.id = userid
+				self.emit('save', body)
 				res.statusCode = 200;
 				res.end('ok')
 			})
@@ -135,7 +179,7 @@ Gandalf.prototype._register = function(req, res){
 	}))
 }
 
-Gandalf.prototype._login = function(req, res){
+Gandalf.prototype._loginHandler = function(req, res){
 	var self = this;
 
 	function returnError(e){
@@ -143,18 +187,28 @@ Gandalf.prototype._login = function(req, res){
 		res.end(e.toString())
 		return
 	}
+
+	var installationid = req.installation ? req.installation.id : 'default'
+
 	req.pipe(concat(function(body){
-		body = JSON.parse(body)
+
+		body = JSON.parse(body.toString())
 
 		var username = body.username
 		var password = body.password
 
-		self._db.checkPassword(username, password, function(err, ok){
-			if(!ok){
+		self._db.checkPassword(installationid, username, password, function(err, userid){
+
+			console.log('-------------------------------------------');
+			console.log('-------------------------------------------');
+			console.log('password result');
+			console.dir(err);
+			console.dir(userid);
+			if(!userid){
 				err = 'incorrect details'
 			}
 			if(err) return returnError(err)
-			req.session.set('user', username, function(err){
+			req.session.set('userid', userid, function(err){
 				if(err) return returnError(err)
 				res.statusCode = 200
 				res.end('ok')
@@ -163,19 +217,13 @@ Gandalf.prototype._login = function(req, res){
 	}))
 }
 
-Gandalf.prototype._logout = function(req, res){
+Gandalf.prototype._logoutHandler = function(req, res){
 	req.session.destroy(function(){
 		res.redirect('/')
 	})
 }
 
-Gandalf.prototype._status = function(req, res){
-	req.session.getAll(function(err, status){
-		res.end(JSON.stringify(status))
-	})
-}
-
-Gandalf.prototype._provider = function(req, res){
+Gandalf.prototype._providerHandler = function(req, res){
 	this.makeProvider(req, function(err, provider){
 		provider.emit('request', req, res)
 	})
@@ -188,44 +236,69 @@ Gandalf.prototype._provider = function(req, res){
 */
 Gandalf.prototype.enable = function(name){
 	if(name){
-		this._providers[name] = Provider(name)
+		this._providers[name] = ProviderFactory(name)
 	}
 	return this
 }
 
-Gandalf.prototype.router = function(fn){
-	this._router = fn
+Gandalf.prototype.virthost = function(fn){
+	this._virthost = fn
 	return this
 }
-
-Gandalf.prototype.apikeys = function(fn){
-	this._apikeys = fn
-	return this
-}
-
 
 Gandalf.prototype.session = function(){
-	this.check_fns()
-	return function(req, res, next){
-
-	}
+	return this._session
 }
 
 Gandalf.prototype.protect = function(){
-	this.check_fns()
 	return function(req, res, next){
-
+		req.session.get('username', function(err, id){
+			if(err || !id){
+				res.statusCode = 403
+				res.end('not allowed')
+				return
+			}
+			next()
+		})
 	}
 }
 
 Gandalf.prototype.handler = function(){
-	this.check_fns()
-	return function(req, res, next){
+	var self = this;
 
+	function route(installation, req, res){
+		installation.host = req.headers.host
+		installation.baseurl = req.headers.host + self.opts.path
+		req.installation = installation
+		var path = url.parse(req.url).pathname
+	  var match = self._httprouter.match(path)
+	  if(match){
+	  	match.fn(req, res, match)
+	  }
+	  else{
+	  	res.statusCode = 404
+	  	res.end(req.url + ' not found')
+	  }
+	}
+
+	return function(req, res, next){
+		if(self._virthost){
+			self._virthost(req.headers.host, function(err, installation){
+				route(installation, req, res)
+			})
+		}
+		else{
+
+			providers = self.opts.providers || {}
+
+			route({
+				id:'default',
+				providers:providers
+			}, req, res)
+		}
 	}
 }
 
-module.exports = function(opts){
-	opts = opts || {}
-	return new Gandalf(opts)
+module.exports = function(db, opts){
+	return new Gandalf(db, opts)
 }

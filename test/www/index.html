@@ -1,0 +1,97 @@
+login<br /><br />
+
+username: <input id="loginusername" /><br />
+password: <input id="loginpassword" /><br />
+
+<button type="button" id="login">login</button>
+
+<hr />
+
+register<br /><br />
+
+username: <input id="registerusername" /><br />
+email: <input id="registeremail" /><br />
+password: <input id="registerpassword" /><br />
+
+<button type="button" id="register">register</button>
+
+<script>
+
+	function confirmAdmin(){
+		return 'notpears'
+	}
+
+	function request(req, done){
+	
+		var request = new XMLHttpRequest();
+		request.open(req.method.toUpperCase(), req.url, true);
+		request.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+
+		request.onload = function() {
+		  if (request.status >= 200 && request.status < 400){
+		    var resp = request.responseText;
+		    done(null, resp)
+		  } else {
+		    done(request.status)
+		  }
+		};
+
+		request.onerror = function(err) {
+		  done(err)
+		};
+
+		request.send(req.body);
+	}
+
+	var loginreply = null
+	function getLoginReply(){
+		return loginreply
+	}
+	
+
+	function login(){
+		var user = document.querySelector('#loginusername')
+		var password = document.querySelector('#loginpassword')
+
+		request({
+			method:'post',
+			url:'/auth/login',
+			body:JSON.stringify({
+				username:user.value,
+				password:password.value
+			})
+		}, function(error, body){
+			loginreply = body || error
+		})
+	}
+
+	var regreply = null
+	function getRegisterReply(){
+		return regreply
+	}
+	
+	function register(){
+		var user = document.querySelector('#registerusername')
+		var email = document.querySelector('#registeremail')
+		var password = document.querySelector('#registerpassword')
+
+		request({
+			method:'post',
+			url:'/auth/register',
+			body:JSON.stringify({
+				username:user.value,
+				password:password.value,
+				email:email.value
+			})
+		}, function(error, body){
+			regreply = body || error	
+		})
+	}
+	
+	var loginButton = document.querySelector('#login')
+	var registerButton = document.querySelector('#register')
+
+	loginButton.addEventListener('click', login)
+	registerButton.addEventListener('click', register)
+
+</script>
