@@ -1,8 +1,7 @@
-var url = require('url')
-var hyperquest = require('hyperquest')
-var concat = require('concat-stream')
-var util = require('util')
-var EventEmitter = require('events').EventEmitter
+var url = require("url")
+  , https = require("https")
+  , util = require("util")
+  , EventEmitter = require("events").EventEmitter
 
 function OAuth2(options){
 
@@ -24,7 +23,6 @@ OAuth2.prototype.parseURI = function(request) {
   return url.parse(protocol + "://" + host + request.url, true)
 }
 
-// transport
 OAuth2.prototype.request = function(original, cb) {
   var request = {}
   for (var key in original) request[key] = original[key]
@@ -33,7 +31,7 @@ OAuth2.prototype.request = function(original, cb) {
 
   request.method || (request.method = "GET")
 
-  var body = null;
+
   if (request.method == "GET") {
     request.path += request.query
     request.headers || (request.headers = {})
@@ -41,34 +39,35 @@ OAuth2.prototype.request = function(original, cb) {
   }
 
   else {
-    body = request.query.slice(1)
+    request.body = request.query.slice(1)
     request.headers || (request.headers = {})
-    request.headers["Content-Length"] = Buffer.byteLength(request.body)
+    request.headers["Content-Length"] = Buffer.byteLength(request.body || '')
     request.headers["Content-Type"] = "application/x-www-form-urlencoded"
     request.headers["User-Agent"] = "authom/0.4";
   }
 
   request.rejectUnauthorized = this.rejectUnauthorizedRequests;
 
-  var req = hyperquest(request)
+  console.log('-------------------------------------------');
+  console.log('REQ');
+  console.dir(request);
 
-  req.pipe(concat(function(data){
-    try { data = JSON.parse(data) }
-    catch (e) { data = url.parse("?" + data, true).query }
+  https
+    .request(request, function(response) {
+      var data = ""
 
-    response.statusCode == 200 ? cb(null, data) : cb(data)
-  }))
+      response.on("data", function(chunk){ data += chunk })
+      response.on("end", function() {
+        try { data = JSON.parse(data) }
+        catch (e) { data = url.parse("?" + data, true).query }
 
-  req.on('error', function(err){
-    cb(err)
-  })
-
-  if(body){
-    req.end(body)
-  }
+        response.statusCode == 200 ? cb(null, data) : cb(data)
+      })
+    })
+    .on("error", cb)
+    .end(request.body || "")
 }
 
-// request router
 OAuth2.prototype.onRequest = function(req, res) {
   var uri = req.url = this.parseURI(req)
 
@@ -79,29 +78,42 @@ OAuth2.prototype.onRequest = function(req, res) {
   else this.onStart(req, res)
 }
 
-// kick things off by sending the browser to the auth login screen (@ google or whoever)
 OAuth2.prototype.onStart = function(req, res) {
+
+  req.url.pathname = req.originalUrl
   this.code.query.redirect_uri = url.format(req.url)
+
+  console.log('-------------------------------------------');
+  console.log('redirect URI');
+  console.dir(this.code.query.redirect_uri);
 
   res.writeHead(302, {Location: url.format(this.code)})
   res.end()
 }
 
-// we gave got a code back from the remote login loop
 OAuth2.prototype.onCode = function(req, res) {
+
   this.token.query.code = req.url.query.code
 
   delete req.url.query
   delete req.url.search
 
+  req.url.pathname = req.originalUrl.split('?')[0]
   this.token.query.redirect_uri = url.format(req.url)
 
   this.request(this.token, function(err, data) {
+
+    console.log('-------------------------------------------');
+    console.dir(err);
     if (err) return this.emit("error", req, res, err)
 
     var tokenKey = this.user.tokenKey || "access_token"
 
     this.user.query[tokenKey] = data.access_token
+    
+    if (this.user.host == "oauth.reddit.com") {
+      this.user.headers = {"Authorization": "bearer " + data.access_token};
+    }
 
     this.request(this.user, function(err, user) {
       if (err) return this.emit("error", req, res, err)

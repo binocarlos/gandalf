@@ -15,7 +15,6 @@ var gandalf
 var browser
 
 var serverState = {}
-var browserState = {}
 
 function ServerFactory(done){
   gandalf = Gandalf(db, {
@@ -74,8 +73,43 @@ function CloseServer(done){
 }
 
 NightmareTape(ServerFactory, CloseServer, function(err, tape){
+
+  var logoutCount = 0
+  function logout(){
+
+    logoutCount++
+
+    tape('logout ' + logoutCount, function (t) {
+
+      tape.browser
+        .goto('http://127.0.0.1:8089/auth/logout')
+        .run(function (err, nightmare) {
+          t.end()
+        })
+    })
+  }
+
+  tape('access denied for private (WILL SHOW AN ERROR)', function (t) {
+
+    var browserState = {}
+    tape.browser
+      .goto('http://127.0.0.1:8089/private')
+      .wait(1000)
+      .evaluate('confirmProtected', function(val){
+        browserState.protectedreply = val
+      })
+      .run(function (err, nightmare) {
+
+        t.equal(browserState.protectedreply, null)
+        t.end()
+        
+        
+      });
+  })
+
   tape('register new account', function (t) {
 
+    var browserState = {}
     tape.browser
       .goto('http://127.0.0.1:8089')
       .type('input#registerusername', 'rodney')
@@ -97,6 +131,7 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
 
   tape('account exists in check', function (t) {
 
+    var browserState = {}
     tape.browser
       .goto('http://127.0.0.1:8089')
       .type('input#registerusername', 'rodney')
@@ -114,25 +149,10 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
   })
 
 
-  tape('access denied for private (WILL SHOW AN ERROR)', function (t) {
-
-    tape.browser
-      .goto('http://127.0.0.1:8089/private')
-      .wait(1000)
-      .evaluate('confirmProtected', function(val){
-        browserState.protectedreply = val
-      })
-      .run(function (err, nightmare) {
-
-        t.equal(browserState.protectedreply, null)
-        t.end()
-        
-        
-      });
-  })
 
   tape('login with wrong password', function (t) {
 
+    var browserState = {}
     tape.browser
       .goto('http://127.0.0.1:8089')
       .type('input#loginusername', 'rodney')
@@ -150,6 +170,7 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
 
   tape('login with correct password', function (t) {
 
+    var browserState = {}
     tape.browser
       .goto('http://127.0.0.1:8089')
       .type('input#loginusername', 'rodney')
@@ -168,6 +189,7 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
 
   tape('login with session', function (t) {
 
+    var browserState = {}
     tape.browser
       .goto('http://127.0.0.1:8089')
       .wait(100)
@@ -184,6 +206,7 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
 
   tape('access OK for private', function (t) {
 
+    var browserState = {}
     tape.browser
       .goto('http://127.0.0.1:8089/private')
       .wait(1000)
@@ -203,6 +226,7 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
 
   tape('logout', function (t) {
 
+    var browserState = {}
     tape.browser
       .goto('http://127.0.0.1:8089/auth/logout')
       .run(function (err, nightmare) {

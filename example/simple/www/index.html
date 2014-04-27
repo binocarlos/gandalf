@@ -1,3 +1,7 @@
+<a href="/auth/facebook">Login with facebook</a>
+
+<hr />
+
 login<br /><br />
 
 username: <input id="loginusername" /><br />
@@ -16,6 +20,10 @@ password: <input id="registerpassword" /><br />
 <button type="button" id="register">register</button>
 
 <script>
+
+	function confirmAdmin(){
+		return 'notpears'
+	}
 
 	function request(req, done){
 	
@@ -39,6 +47,11 @@ password: <input id="registerpassword" /><br />
 		request.send(req.body);
 	}
 
+	var loginreply = null
+	function getLoginReply(){
+		return loginreply
+	}
+
 	function login(){
 		var user = document.querySelector('#loginusername')
 		var password = document.querySelector('#loginpassword')
@@ -51,13 +64,14 @@ password: <input id="registerpassword" /><br />
 				password:password.value
 			})
 		}, function(error, body){
-			console.log('login response');
-			console.dir(error);
-			console.dir(body);
+			loginreply = body || error
 		})
 	}
 
-	var _registered = 'no'
+	var regreply = null
+	function getRegisterReply(){
+		return regreply
+	}
 	
 	function register(){
 		var user = document.querySelector('#registerusername')
@@ -66,17 +80,14 @@ password: <input id="registerpassword" /><br />
 
 		request({
 			method:'post',
-			url:'/auth/login',
+			url:'/auth/register',
 			body:JSON.stringify({
 				username:user.value,
 				password:password.value,
 				email:email.value
 			})
 		}, function(error, body){
-			console.log('login response');
-			console.dir(error);
-			console.dir(body);
-			_registered = 'yes'
+			regreply = body || error	
 		})
 	}
 	

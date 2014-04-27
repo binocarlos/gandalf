@@ -10,17 +10,13 @@ var Database = require('./database')
 // keep a log of the Provider classes
 var Providers = {}
 function ProviderFactory(name){
-	var Provder = null
+	var Provider = null
 	if(Providers[name]){
 		return Providers[name]
 	}
-	try{
-		Provder = require('./providers/' + name)
-		Provders[name] = Provder
-	} catch(e){
-		console.error('no provider: ' + name)
-	}
-	return Provder
+	Provider = require('./providers/' + name)
+	Providers[name] = Provider
+	return Provider
 }
 
 function methodFilter(method, fn){
@@ -71,20 +67,25 @@ util.inherits(Gandalf, EventEmitter)
 module.exports = Gandalf
 
 // get a provider all hooked up with the keys
-Gandalf.prototype._makeProvider = function(req, done){
+Gandalf.prototype._makeProvider = function(name, installation, done){
 	var self = this;
-	var Provider = Providers[req.params.provider]
+	
+	var Provider = Providers[name]
 
 	if(!Provider){
-		done('no provider for: ' + req.params.provider + ' found')
+		return done('no provider for: ' + name + ' found')
 	}
-	var config = req.installation.providers[req.params.provider]
+	var config = installation.providers[name]
+
+	if(!config){
+		return done('no config for ' + name + ' found')
+	}
 
 	if(Provider && config){
-		var provider = Provider(keys)
+		var provider = new Provider(config)
 
 		provider.once('auth', function(req, res, data){
-			self.connect(req, res, data)
+			self._connectHandler(req, res, data)
 		})
 
 		done(null, provider)
@@ -110,7 +111,7 @@ Gandalf.prototype._addRoutes = function(name){
 		self._checkHandler(req, res)
 	}))
 	this._httprouter.addRoute('/:provider', function(req, res, match){
-		self._providerHandler(req, res)
+		self._providerHandler(req, res, match)
 	})
 }
 
@@ -144,11 +145,14 @@ Gandalf.prototype._registerHandler = function(req, res){
 			delete(body.password)
 
 			self._db.registerUser(installationid, 'local', username, password, function(err, userid){
-				body.installationid = installationid
-				body.id = userid
-				self.emit('save', body)
-				res.statusCode = 200;
-				res.end('ok')
+				req.session.set('userid', userid, function(){
+					body.installationid = installationid
+					body.id = userid
+					self.emit('save', body)
+					res.statusCode = 200;
+					res.end('ok')
+				})
+				
 			})
 		})
 	}))
@@ -192,10 +196,23 @@ Gandalf.prototype._logoutHandler = function(req, res){
 	})
 }
 
-Gandalf.prototype._providerHandler = function(req, res){
-	this.makeProvider(req, function(err, provider){
+Gandalf.prototype._providerHandler = function(req, res, match){
+	console.log('-------------------------------------------');
+	console.log('-------------------------------------------');
+	console.log('-------------------------------------------');
+	console.log('PRIVDER');
+	console.dir(req.url);
+	
+	this._makeProvider(match.params.provider, req.installation, function(err, provider){
 		provider.emit('request', req, res)
 	})
+}
+
+Gandalf.prototype._connectHandler = function(req, res, data){
+	console.log('-------------------------------------------');
+	console.log('-------------------------------------------');
+	console.log('CONNECT!!!');
+	console.dir(data);
 }
 
 /*
