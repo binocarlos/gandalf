@@ -103,11 +103,10 @@ Database.prototype.connect = function(installationid, loggedInId, provider, data
 	var refreshtoken = data.refresh_token
 
 	self.userId(installationid, provider, id, function(err, userid){
-		if(loggedInId && userid!=loggedInId){
+		if(loggedInId && userid && userid!=loggedInId){
 			// the account is linked to another user
 			return done('this account is linked to another user')
 		}
-
 		self.registerUser(installationid, provider, loggedInId, id, null, function(err, dbid){
 			if(err) return done(err)
 			done(null, dbid, {

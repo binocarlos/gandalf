@@ -1,3 +1,4 @@
+var twitter_profile = require('twitter-profile');
 var EventEmitter = require("events").EventEmitter
   , util = require("util")
   , url = require("url")
@@ -26,7 +27,7 @@ Twitter.prototype.parseURI = function(request) {
     , protocol = request.socket.encrypted || proto == "https" ? "https" : "http"
     , host = request.headers.host || request.connection.remoteAddress
 
-  return url.parse(protocol + "://" + host + request.url, true)
+  return url.parse(protocol + "://" + host + request.originalUrl, true)
 }
 
 Twitter.prototype.onRequest = function(req, res) {
@@ -64,11 +65,34 @@ Twitter.prototype.onRequest = function(req, res) {
   function onToken(error, oauth_access_token, oauth_access_token_secret, results){
     if (error) return self.emit("error", req, res, uri.query, error)
 
-    self.emit("auth", req, res, {
+    var data = {
       token: oauth_access_token,
       secret: oauth_access_token_secret,
       id: results.user_id,
       data: results
+    }
+
+    var options = {
+      username:data.data.screen_name,
+      userid:data.id,
+      oauth_token:data.token,
+      oauth_secret:data.secret,
+      consumer_key:self.id,
+      consumer_secret:self.secret
+    }
+
+    twitter_profile(options, function(error, twitteruser){
+      if(error){
+        return done(error);
+      }
+      
+      data.data = {
+        id:data.id,
+        image:twitteruser.profile_image_url,
+        name:data.screen_name 
+      }
+
+      self.emit("auth", req, res, data)
     })
   }
 }

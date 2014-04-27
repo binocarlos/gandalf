@@ -5,7 +5,7 @@ var Router = require('routes')
 var concat = require('concat-stream')
 var LevelSession = require('level-session')
 var Database = require('./database')
-
+var Extractors = require('./extractors')
 
 // keep a log of the Provider classes
 var Providers = {}
@@ -80,8 +80,12 @@ Gandalf.prototype._makeProvider = function(installation, name, done){
 	if(Provider && config){
 		var provider = new Provider(config)
 
-		provider.once('auth', function(req, res, data){
-			self._connectHandler(req, res, data)
+		provider.once('auth', function(req, res, packet){
+			self._connectHandler(req, res, provider, packet)
+		})
+
+		provider.once('error', function(err){
+			console.error(err)
 		})
 
 		done(null, provider)
@@ -121,16 +125,35 @@ Gandalf.prototype._checkHandler = function(req, res){
 }
 
 
-Gandalf.prototype._connectHandler = function(req, res, data){
+Gandalf.prototype._connectHandler = function(req, res, provider, data){
 	var self = this;
 	var installationid = req.installation ? req.installation.id : 'default'
 	req.session.get('userid', function(err, loggedInId){
 		self._db.connect(installationid, loggedInId, req.provider, data, function(err, userid, profile){
+			if(err){
+				res.statusCode = 500
+				res.end(err)
+				return
+			}
 			req.session.set('userid', userid, function(){
-				profile.installationid = installationid
-				profile.id = userid
-				self.emit('save', req.provider, profile)
-				res.redirect('/')
+				Extractors[name](provider, data, function(err, data){
+
+					console.log('-------------------------------------------');
+					console.log('-------------------------------------------');
+					console.dir('extract');
+					console.dir(data);
+
+					
+					data.installationid = installationid
+					data.id = userid
+					self.emit('save', req.provider, profile)
+					res.redirect('/')
+
+					packet.data = data
+				
+				})
+
+				
 			})
 		})
 	})
@@ -145,15 +168,7 @@ Gandalf.prototype._registerHandler = function(req, res){
 		body = JSON.parse(body.toString())
 		var username = body.username
 		var password = body.password
-		console.log('-------------------------------------------');
-		console.log('check username');
-		console.dir(installationid);
-		console.dir(username);
 		self._db.checkUsername(installationid, 'local', username, function(err, ok){
-			console.log('-------------------------------------------');
-			console.log('-------------------------------------------');
-			console.dir(err);
-			console.dir(ok);
 			if(!ok){
 				err = 'username already exists'
 			}
@@ -197,17 +212,27 @@ Gandalf.prototype._loginHandler = function(req, res){
 		var username = body.username
 		var password = body.password
 
-		self._db.checkPassword(installationid, username, password, function(err, userid){
-			if(!userid){
-				err = 'incorrect details'
+		req.session.get('userid', function(err, id){
+			if(id){
+				console.error('already logged in')
+				res.statusCode = 500
+				res.end('notok')
 			}
-			if(err) return returnError(err)
-			req.session.set('userid', userid, function(err){
-				if(err) return returnError(err)
-				res.statusCode = 200
-				res.end('ok')
-			})
+			else{
+				self._db.checkPassword(installationid, username, password, function(err, userid){
+					if(!userid){
+						err = 'incorrect details'
+					}
+					if(err) return returnError(err)
+					req.session.set('userid', userid, function(err){
+						if(err) return returnError(err)
+						res.statusCode = 200
+						res.end('ok')
+					})
+				})
+			}
 		})
+
 	}))
 }
 

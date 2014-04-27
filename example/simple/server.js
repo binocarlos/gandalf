@@ -16,6 +16,16 @@ if(!process.env.FACEBOOK_SECRET){
   process.exit(1)
 }
 
+if(!process.env.TWITTER_ID){
+  console.error('TWITTER_ID var needed')
+  process.exit(1)
+}
+
+if(!process.env.TWITTER_SECRET){
+  console.error('TWITTER_SECRET var needed')
+  process.exit(1)
+}
+
 var users = {}
 
 var db = sublevel(level('gandalf-examples--simple', {encoding: 'json'}))
@@ -25,6 +35,10 @@ var gandalf = Gandalf(db, {
     facebook:{
       id:process.env.FACEBOOK_ID,
       secret:process.env.FACEBOOK_SECRET
+    },
+    twitter:{
+      id:process.env.TWITTER_ID,
+      secret:process.env.TWITTER_SECRET
     }
   }
 })
@@ -53,7 +67,7 @@ app.use('/auth', gandalf.handler())
 
 app.use('/status', function(req, res){
   req.session.get('userid', function(err, id){
-    var user = users[id]
+    var user = users[id] || {}
     user.id = id;
     res.end(JSON.stringify(user))
   })

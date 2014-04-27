@@ -164,8 +164,6 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
       });
   })
 
-
-/*
   tape('login with wrong password', function (t) {
 
     var browserState = {}
@@ -259,6 +257,6 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
         })
       })
   })
-*/
+
   tape.shutdown()
 })

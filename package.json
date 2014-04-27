@@ -41,6 +41,8 @@
     "level-session": "^0.3.1",
     "node-uuid": "^1.4.1",
     "bcrypt": "^0.7.8",
-    "hyperquest": "^0.3.0"
+    "hyperquest": "^0.3.0",
+    "oauth": "^0.9.11",
+    "twitter-profile": "0.0.1"
   }
 }

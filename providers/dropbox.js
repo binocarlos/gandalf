@@ -27,7 +27,7 @@ Dropbox.prototype.parseURI = function(request) {
   var protocol = request.socket.encrypted ? "https" : "http"
     , host = request.headers.host || request.connection.remoteAddress
 
-  return url.parse(protocol + "://" + host + request.url, true)
+  return url.parse(protocol + "://" + host + request.originalUrl, true)
 }
 
 Dropbox.prototype.getReturnCall = function(request) {
