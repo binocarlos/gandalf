@@ -45,6 +45,8 @@ function ServerFactory(done){
   // enables users to login using '/auth/facebook' for example
   app.use('/auth', gandalf.handler())
 
+  app.use('/private', gandalf.protect())
+  
   // the logged in or not branch
   app.get('/', function(req, res){
     res.setHeader('Content-Type', 'text/html')
@@ -112,6 +114,23 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
   })
 
 
+  tape('access denied for private (WILL SHOW AN ERROR)', function (t) {
+
+    tape.browser
+      .goto('http://127.0.0.1:8089/private')
+      .wait(1000)
+      .evaluate('confirmProtected', function(val){
+        browserState.protectedreply = val
+      })
+      .run(function (err, nightmare) {
+
+        t.equal(browserState.protectedreply, null)
+        t.end()
+        
+        
+      });
+  })
+
   tape('login with wrong password', function (t) {
 
     tape.browser
@@ -160,6 +179,26 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
         t.end()
       });
   })
+
+
+
+  tape('access OK for private', function (t) {
+
+    tape.browser
+      .goto('http://127.0.0.1:8089/private')
+      .wait(1000)
+      .evaluate('confirmProtected', function(val){
+        browserState.protectedreply = val
+      })
+      .run(function (err, nightmare) {
+
+        t.equal(browserState.protectedreply, 'peaches')
+        t.end()
+        
+        
+      });
+  })
+
 
 
   tape('logout', function (t) {

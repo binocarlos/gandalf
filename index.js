@@ -117,11 +117,6 @@ Gandalf.prototype._addRoutes = function(name){
 Gandalf.prototype._checkHandler = function(req, res){
 	var self = this;
 	var query = url.parse(req.url).query
-
-	console.log('-------------------------------------------');
-	console.log('-------------------------------------------');
-	console.log('CHECK');
-	console.dir(query);
 	var installation = req.installation ? req.installation.id : 'default'
 	self._db.checkUsername(installation, 'local', query.username, function(err, ok){
 		res.end(ok ? 'ok' : 'notok')
@@ -130,27 +125,13 @@ Gandalf.prototype._checkHandler = function(req, res){
 
 Gandalf.prototype._registerHandler = function(req, res){
 	var self = this;
-	console.log('-------------------------------------------');
-	console.log('-------------------------------------------');
-	console.log('REGISTER');
 	var installationid = req.installation ? req.installation.id : 'default'
 
 	req.pipe(concat(function(body){
 		body = JSON.parse(body.toString())
-
-		console.dir(body);
 		var username = body.username
 		var password = body.password
-
-		console.log('-------------------------------------------');
-		console.log('check username');
-		console.dir(installationid);
-
 		self._db.checkUsername(installationid, 'local', username, function(err, ok){
-			console.log('-------------------------------------------');
-			console.log('results');
-			console.dir(err);
-			console.dir(ok);
 			if(!ok){
 				err = 'username already exists'
 			}
@@ -162,13 +143,7 @@ Gandalf.prototype._registerHandler = function(req, res){
 
 			delete(body.password)
 
-			console.log('-------------------------------------------');
-			console.log('register user');
-
 			self._db.registerUser(installationid, 'local', username, password, function(err, userid){
-
-				console.log('-------------------------------------------');
-				console.log('regisqterdd');
 				body.installationid = installationid
 				body.id = userid
 				self.emit('save', body)
@@ -198,12 +173,6 @@ Gandalf.prototype._loginHandler = function(req, res){
 		var password = body.password
 
 		self._db.checkPassword(installationid, username, password, function(err, userid){
-
-			console.log('-------------------------------------------');
-			console.log('-------------------------------------------');
-			console.log('password result');
-			console.dir(err);
-			console.dir(userid);
 			if(!userid){
 				err = 'incorrect details'
 			}
@@ -252,7 +221,7 @@ Gandalf.prototype.session = function(){
 
 Gandalf.prototype.protect = function(){
 	return function(req, res, next){
-		req.session.get('username', function(err, id){
+		req.session.get('userid', function(err, id){
 			if(err || !id){
 				res.statusCode = 403
 				res.end('not allowed')

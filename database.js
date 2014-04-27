@@ -83,13 +83,7 @@ Database.prototype.loadPassword = function(installation, username, done){
 // local provider only
 Database.prototype.checkPassword = function(installation, username, password, done){
 	var self = this;
-	console.log('-------------------------------------------');
-	console.log('check passowrd');
-	console.dir(installation);
-	console.dir(username);
 	self.loadPassword(installation, username, function(err, dbpassword){
-		console.log('-------------------------------------------');
-		console.dir(dbpassword);
 		utils.comparePassword(password, dbpassword, done)
 	})	
 }
