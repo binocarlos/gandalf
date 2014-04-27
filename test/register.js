@@ -17,12 +17,7 @@ var browser
 var serverState = {}
 
 function ServerFactory(done){
-  gandalf = Gandalf(db, {
-    path:'/auth',
-    providers:{
-      local:true
-    }
-  })
+  gandalf = Gandalf(db)
 
   gandalf.on('batch', function(b){
     console.log('-------------------------------------------')
@@ -30,7 +25,7 @@ function ServerFactory(done){
     console.dir(b)
   })
 
-  gandalf.on('save', function(data){
+  gandalf.on('save', function(userid, data){
     serverState.savedUser = data
   })
 
@@ -129,6 +124,27 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
       });
   })
 
+  
+  tape('access OK for private', function (t) {
+
+    var browserState = {}
+    tape.browser
+      .goto('http://127.0.0.1:8089/private')
+      .wait(1000)
+      .evaluate('confirmProtected', function(val){
+        browserState.protectedreply = val
+      })
+      .run(function (err, nightmare) {
+
+        t.equal(browserState.protectedreply, 'peaches')
+        t.end()
+        
+        
+      });
+  })
+
+  logout()
+
   tape('account exists in check', function (t) {
 
     var browserState = {}
@@ -149,7 +165,7 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
   })
 
 
-
+/*
   tape('login with wrong password', function (t) {
 
     var browserState = {}
@@ -243,6 +259,6 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
         })
       })
   })
-
+*/
   tape.shutdown()
 })

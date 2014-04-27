@@ -39,10 +39,6 @@ function Gandalf(db, opts){
 		providers:{}
 	}
 
-	if(!this.opts.path){
-		throw new Error('path option required for Gandalf to start')
-	}
-
 	this._providers = {}
 
 	Object.keys(this.opts.providers || {}).forEach(function(key){
@@ -67,7 +63,7 @@ util.inherits(Gandalf, EventEmitter)
 module.exports = Gandalf
 
 // get a provider all hooked up with the keys
-Gandalf.prototype._makeProvider = function(name, installation, done){
+Gandalf.prototype._makeProvider = function(installation, name, done){
 	var self = this;
 	
 	var Provider = Providers[name]
@@ -118,11 +114,28 @@ Gandalf.prototype._addRoutes = function(name){
 Gandalf.prototype._checkHandler = function(req, res){
 	var self = this;
 	var query = url.parse(req.url).query
-	var installation = req.installation ? req.installation.id : 'default'
-	self._db.checkUsername(installation, 'local', query.username, function(err, ok){
+	var installationid = req.installation ? req.installation.id : 'default'
+	self._db.checkUsername(installationid, 'local', query.username, function(err, ok){
 		res.end(ok ? 'ok' : 'notok')
 	})
 }
+
+
+Gandalf.prototype._connectHandler = function(req, res, data){
+	var self = this;
+	var installationid = req.installation ? req.installation.id : 'default'
+	req.session.get('userid', function(err, loggedInId){
+		self._db.connect(installationid, loggedInId, req.provider, data, function(err, userid, profile){
+			req.session.set('userid', userid, function(){
+				profile.installationid = installationid
+				profile.id = userid
+				self.emit('save', req.provider, profile)
+				res.redirect('/')
+			})
+		})
+	})
+}
+
 
 Gandalf.prototype._registerHandler = function(req, res){
 	var self = this;
@@ -132,7 +145,15 @@ Gandalf.prototype._registerHandler = function(req, res){
 		body = JSON.parse(body.toString())
 		var username = body.username
 		var password = body.password
+		console.log('-------------------------------------------');
+		console.log('check username');
+		console.dir(installationid);
+		console.dir(username);
 		self._db.checkUsername(installationid, 'local', username, function(err, ok){
+			console.log('-------------------------------------------');
+			console.log('-------------------------------------------');
+			console.dir(err);
+			console.dir(ok);
 			if(!ok){
 				err = 'username already exists'
 			}
@@ -144,11 +165,11 @@ Gandalf.prototype._registerHandler = function(req, res){
 
 			delete(body.password)
 
-			self._db.registerUser(installationid, 'local', username, password, function(err, userid){
+			self._db.registerUser(installationid, 'local', null, username, password, function(err, userid){
 				req.session.set('userid', userid, function(){
 					body.installationid = installationid
 					body.id = userid
-					self.emit('save', body)
+					self.emit('save', 'local', body)
 					res.statusCode = 200;
 					res.end('ok')
 				})
@@ -197,22 +218,11 @@ Gandalf.prototype._logoutHandler = function(req, res){
 }
 
 Gandalf.prototype._providerHandler = function(req, res, match){
-	console.log('-------------------------------------------');
-	console.log('-------------------------------------------');
-	console.log('-------------------------------------------');
-	console.log('PRIVDER');
-	console.dir(req.url);
+	req.provider = match.params.provider
 	
-	this._makeProvider(match.params.provider, req.installation, function(err, provider){
+	this._makeProvider(req.installation, match.params.provider, function(err, provider){
 		provider.emit('request', req, res)
 	})
-}
-
-Gandalf.prototype._connectHandler = function(req, res, data){
-	console.log('-------------------------------------------');
-	console.log('-------------------------------------------');
-	console.log('CONNECT!!!');
-	console.dir(data);
 }
 
 /*

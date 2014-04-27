@@ -2,7 +2,7 @@ var EventEmitter = require('events').EventEmitter
 var util = require('util')
 var uuid = require('node-uuid')
 var utils = require('./utils')
-
+var concat = require('concat-stream')
 function Database(db, opts){
 	var self = this;
 	EventEmitter.call(this)
@@ -17,23 +17,29 @@ module.exports = Database
 
 // default~user~local~binocarlos = 123-123-123
 // default~password~123-123-123 = DjhkdfjKHJNdfkhDf
-Database.prototype.registerUser = function(installation, provider, username, password, done){
+Database.prototype.registerUser = function(installationid, provider, userid, username, password, done){
 	var self = this;
-	var id = uuid.v1()
+	var id = userid || uuid.v1()
 
 	function makekey(arr){
-		return [installation].concat(arr).join('~')
+		return [installationid].concat(arr).join('~')
 	}
 
 	function runbatch(batch){
-		self.emit('batch', batch)
-		self._db.batch(batch, done)
+		self._db.batch(batch, function(err){
+			self.emit('batch', batch)
+			done(err, id)
+		})
 	}
 
 	var batch = [{
 		type:'put',
 		key:makekey(['user', provider, username]),
 		value:id
+	},{
+		type:'put',
+		key:makekey(['links', id, provider, username]),
+		value:' '
 	}]
 
 	if(password){
@@ -52,13 +58,13 @@ Database.prototype.registerUser = function(installation, provider, username, pas
 	}
 }
 
-Database.prototype.userId = function(installation, provider, username, done){
-	var key = [installation, 'user', provider, username].join('~')
+Database.prototype.userId = function(installationid, provider, username, done){
+	var key = [installationid, 'user', provider, username].join('~')
 	this._db.get(key, done)
 }
 
-Database.prototype.checkUsername = function(installation, provider, username, done){
-	this.userId(installation, provider, username, function(err, id){
+Database.prototype.checkUsername = function(installationid, provider, username, done){
+	this.userId(installationid, provider, username, function(err, id){
 		if(err || !id){
 			done(null, true)
 		}
@@ -68,22 +74,47 @@ Database.prototype.checkUsername = function(installation, provider, username, do
 	})
 }
 
-Database.prototype.loadPassword = function(installation, username, done){
+Database.prototype.loadPassword = function(installationid, username, done){
 	var self = this;
-	this.userId(installation, 'local', username, function(err, id){
+	this.userId(installationid, 'local', username, function(err, id){
 		if(!err && !id){
 			err = 'no id found for username: ' + installation + ' -> ' + username
 		}
 		if(err) return done(err)
-		var key = [installation, 'password', id].join('~')
+		var key = [installationid, 'password', id].join('~')
 		self._db.get(key, done)
 	})
 }
 
 // local provider only
-Database.prototype.checkPassword = function(installation, username, password, done){
+Database.prototype.checkPassword = function(installationid, username, password, done){
 	var self = this;
-	self.loadPassword(installation, username, function(err, dbpassword){
+	self.loadPassword(installationid, username, function(err, dbpassword){
 		utils.comparePassword(password, dbpassword, done)
-	})	
+	})
+}
+
+Database.prototype.connect = function(installationid, loggedInId, provider, data, done){
+
+	var self = this;
+	var profile = data.data
+	var id = data.id
+	var token = data.token
+	var refreshtoken = data.refresh_token
+
+	self.userId(installationid, provider, id, function(err, userid){
+		if(loggedInId && userid!=loggedInId){
+			// the account is linked to another user
+			return done('this account is linked to another user')
+		}
+
+		self.registerUser(installationid, provider, loggedInId, id, null, function(err, dbid){
+			if(err) return done(err)
+			done(null, dbid, {
+				token:token,
+				refreshtoken:refreshtoken,
+				profile:profile
+			})
+		})	
+	})
 }

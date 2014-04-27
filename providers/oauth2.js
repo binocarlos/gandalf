@@ -48,10 +48,6 @@ OAuth2.prototype.request = function(original, cb) {
 
   request.rejectUnauthorized = this.rejectUnauthorizedRequests;
 
-  console.log('-------------------------------------------');
-  console.log('REQ');
-  console.dir(request);
-
   https
     .request(request, function(response) {
       var data = ""
@@ -83,10 +79,6 @@ OAuth2.prototype.onStart = function(req, res) {
   req.url.pathname = req.originalUrl
   this.code.query.redirect_uri = url.format(req.url)
 
-  console.log('-------------------------------------------');
-  console.log('redirect URI');
-  console.dir(this.code.query.redirect_uri);
-
   res.writeHead(302, {Location: url.format(this.code)})
   res.end()
 }
@@ -103,8 +95,6 @@ OAuth2.prototype.onCode = function(req, res) {
 
   this.request(this.token, function(err, data) {
 
-    console.log('-------------------------------------------');
-    console.dir(err);
     if (err) return this.emit("error", req, res, err)
 
     var tokenKey = this.user.tokenKey || "access_token"

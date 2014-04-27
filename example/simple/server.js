@@ -21,8 +21,7 @@ var users = {}
 var db = sublevel(level('gandalf-examples--simple', {encoding: 'json'}))
 
 var gandalf = Gandalf(db, {
-  path:'/auth',
-  providers:{    
+  providers:{
     facebook:{
       id:process.env.FACEBOOK_ID,
       secret:process.env.FACEBOOK_SECRET
@@ -36,8 +35,10 @@ gandalf.on('batch', function(b){
   console.dir(b)
 })
 
-gandalf.on('save', function(data){
-  users[data.id] = data
+gandalf.on('save', function(provider, data){
+  var user = users[data.id] || {}
+  user[provider] = data
+  users[data.id] = user
 })
 
 // create a server and mount the handler anywhere you want
@@ -53,6 +54,7 @@ app.use('/auth', gandalf.handler())
 app.use('/status', function(req, res){
   req.session.get('userid', function(err, id){
     var user = users[id]
+    user.id = id;
     res.end(JSON.stringify(user))
   })
 })

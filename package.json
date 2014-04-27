@@ -4,7 +4,8 @@
   "description": "node.js oauth login wizard with leveldb session storage",
   "main": "index.js",
   "scripts": {
-    "test": "set -e; for t in test/*.js; do node $t; done"
+    "test2": "set -e; for t in test/*.js; do node $t; done",
+    "test": "node test/register.js"
   },
   "repository": {
     "type": "git",
