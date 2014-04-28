@@ -1,0 +1,17 @@
+{
+  "name": "gandalf-example",
+  "description": "An example of a gandalf login system using shadowfax directives",
+  "version": "0.0.1",
+  "keywords": [],
+  "dependencies": {
+    "binocarlos/shadowfax": "*"
+  },
+  "development": {},
+  "main": "app.js",
+  "scripts": [
+    "app.js"
+  ],
+  "remotes": [
+    "https://raw.githubusercontent.com"
+  ]
+}

@@ -26,8 +26,6 @@ if(!process.env.TWITTER_SECRET){
   process.exit(1)
 }
 
-var users = {}
-
 var db = sublevel(level('gandalf-examples--simple', {encoding: 'json'}))
 
 var gandalf = Gandalf(db, {
@@ -49,6 +47,7 @@ gandalf.on('batch', function(b){
   console.dir(b)
 })
 
+var users = {}
 gandalf.on('save', function(provider, data){
   var user = users[data.id] || {}
   user[provider] = data
@@ -65,27 +64,7 @@ app.use(gandalf.session())
 // enables users to login using '/auth/facebook' for example
 app.use('/auth', gandalf.handler())
 
-app.use('/status', function(req, res){
-  req.session.get('userid', function(err, id){
-    var user = users[id] || {}
-    user.id = id;
-    res.end(JSON.stringify(user))
-  })
-})
-
-// the logged in or not branch
-app.get('/', function(req, res){
-  res.setHeader('Content-Type', 'text/html')
-  req.session.get('userid', function(err, id){
-    if(!err && id){
-      fs.createReadStream(__dirname + '/www/home.html').pipe(res)
-    }
-    else{
-      fs.createReadStream(__dirname + '/www/index.html').pipe(res)
-    }
-  })
-})
-
+app.use('/private', gandalf.protect())
 app.use(ecstatic(__dirname + '/www'))
 
 server.listen(80, function(){

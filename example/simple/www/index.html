@@ -1,101 +1,39 @@
-<a href="/auth/facebook">Login with facebook</a><br />
-<a href="/auth/twitter">Login with twitter</a>
+<html>
+<head>
+	<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.1.1/css/bootstrap.css" />
+</head>
+<body ng-app="gandalf-example" ng-controller="gandalf-ctrl">
 
-<hr />
+<div class="container">
+	<div class="row">
+		<div class="col-sm-12">
+			<a href="/auth/facebook">Login with facebook</a><br />
+			<a href="/auth/twitter">Login with twitter</a>
+			<hr />
+		</div>
+	</div>
+	<div class="row">
+		<div class="col-sm-12">
+			<shadowfax-login 
+				success="login.success" 
+				endpoint="login.endpoint" />
+		</div>
+	</div>
+	<div class="row">
+		<div class="col-sm-12">
+			<shadowfax-register 
+				success="login.success" 
+				endpoint="login.endpoint" />
+		</div>
+	</div>
+</div>
 
-login<br /><br />
-
-username: <input id="loginusername" /><br />
-password: <input id="loginpassword" /><br />
-
-<button type="button" id="login">login</button>
-
-<hr />
-
-register<br /><br />
-
-username: <input id="registerusername" /><br />
-email: <input id="registeremail" /><br />
-password: <input id="registerpassword" /><br />
-
-<button type="button" id="register">register</button>
-
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.0/jquery.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/angular.js/1.2.15/angular.min.js"></script>
+<script src="build/build.js"></script>
 <script>
-
-	function confirmAdmin(){
-		return 'notpears'
-	}
-
-	function request(req, done){
-	
-		var request = new XMLHttpRequest();
-		request.open(req.method.toUpperCase(), req.url, true);
-		request.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
-
-		request.onload = function() {
-		  if (request.status >= 200 && request.status < 400){
-		    var resp = request.responseText;
-		    done(null, resp)
-		  } else {
-		    done(request.status)
-		  }
-		};
-
-		request.onerror = function(err) {
-		  done(err)
-		};
-
-		request.send(req.body);
-	}
-
-	var loginreply = null
-	function getLoginReply(){
-		return loginreply
-	}
-
-	function login(){
-		var user = document.querySelector('#loginusername')
-		var password = document.querySelector('#loginpassword')
-
-		request({
-			method:'post',
-			url:'/auth/login',
-			body:JSON.stringify({
-				username:user.value,
-				password:password.value
-			})
-		}, function(error, body){
-			loginreply = body || error
-		})
-	}
-
-	var regreply = null
-	function getRegisterReply(){
-		return regreply
-	}
-	
-	function register(){
-		var user = document.querySelector('#registerusername')
-		var email = document.querySelector('#registeremail')
-		var password = document.querySelector('#registerpassword')
-
-		request({
-			method:'post',
-			url:'/auth/register',
-			body:JSON.stringify({
-				username:user.value,
-				password:password.value,
-				email:email.value
-			})
-		}, function(error, body){
-			regreply = body || error	
-		})
-	}
-	
-	var loginButton = document.querySelector('#login')
-	var registerButton = document.querySelector('#register')
-
-	loginButton.addEventListener('click', login)
-	registerButton.addEventListener('click', register)
-
+	require('gandalf-example')
 </script>
+
+</body>
+</html>

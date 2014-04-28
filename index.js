@@ -110,9 +110,59 @@ Gandalf.prototype._addRoutes = function(name){
 	this._httprouter.addRoute('/check', methodFilter('get', function(req, res, match){
 		self._checkHandler(req, res)
 	}))
+	this._httprouter.addRoute('/claim', methodFilter('post', function(req, res, match){
+		self._claimHandler(req, res)
+	}))
+	this._httprouter.addRoute('/status', methodFilter('get', function(req, res, match){
+		self._statusHandler(req, res)
+	}))
 	this._httprouter.addRoute('/:provider', function(req, res, match){
 		self._providerHandler(req, res, match)
 	})
+}
+
+
+Gandalf.prototype._statusHandler = function(req, res){
+	var self = this;
+	req.session.get('userid', function(err, id){
+    var user = users[id] || {}
+    user.id = id;
+    res.end(JSON.stringify(user))
+  })
+}
+
+// set the username for connected users
+Gandalf.prototype._claimHandler = function(req, res){
+	var self = this;
+	var installationid = req.installation ? req.installation.id : 'default'
+
+	req.pipe(concat(function(body){
+
+		body = JSON.parse(body.toString())
+		
+		var username = body.username
+
+		req.session.get('userid', function(err, loggedInId){
+
+			if(err || !loggedInId){
+				res.statusCode = 403
+				res.end('must be logged in')
+				return
+			}
+
+			self._db.checkUsername(installationid, 'local', username, function(err, ok){
+				if(!ok){
+					res.statusCode = 500
+					res.end('name already taken')
+				}
+				else{
+					self._db.registerUser(installationid, 'local', loggedInId, username, null, function(err){
+						res.end('ok')
+					})
+				}
+			})
+		})
+	}))
 }
 
 Gandalf.prototype._checkHandler = function(req, res){
@@ -137,8 +187,6 @@ Gandalf.prototype._connectHandler = function(req, res, provider, data){
 			}
 			req.session.set('userid', userid, function(){
 
-				console.log('-------------------------------------------');
-				console.log('extracting');
 				Extractors[req.provider](provider, data, function(err, profile){
 
 					profile.installationid = installationid

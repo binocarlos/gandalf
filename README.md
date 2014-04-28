@@ -26,8 +26,6 @@ var level    = require('level-test')()
 var sublevel = require('level-sublevel')
 var Gandalf = require('../../')
 var ecstatic = require('ecstatic')
-var xtend = require('xtend')
-var fs = require('fs')
 var db = sublevel(level('gandalf-examples--simple', {encoding: 'json'}))
 
 var gandalf = Gandalf(db, {
@@ -48,10 +46,12 @@ var gandalf = Gandalf(db, {
 // you can handle this how you want (e.g. other leveldb / Redis etc)
 var users = {}
 
-gandalf.on('save', function(userid, data){
-	var user = users[userid] || {}
-	xtend(user, data)
+gandalf.on('save', function(provider, data){
+  var user = users[data.id] || {}
+  user[provider] = data
+  users[data.id] = user
 })
+
 
 app = express()
 server = http.createServer(app)
@@ -135,8 +135,10 @@ This handle can be mounted onto the host express application where you want.
  * GET /<providername> - e.g. /auth/google - this triggers the OAuth login loop for a provider
  * POST /register - post username and password and other fields to register a new user
  * POST /login - post username and password fields to login using the password method
+ * POST /claim - post a username to use for a connected user
  * GET /logout - clear the session and redirect to '/'
- * GET /status - return a JSON representation of the current session
+ * GET /check?username=<username> - check if the given username exists
+ * GET /status - return a JSON representation of the current session - this includes OAuth tokens
 
 ### gandalf.protect(function(req, appid, userid, done){})
 
@@ -167,6 +169,14 @@ app.use('/private2', gandalf.protect(function(method, appid, userid, done){
 
 If you do not pass a function then there just needs to be a user for access to be granted.
 
+### gandalf.delete(id, function(){})
+
+Delete a user and all their details
+
+### gandalf.disconnect(id, provider, function(){})
+
+Remove the connection details for 'provider' in the given user
+
 ## events
 
 ### gandalf.on('login', function(appid, provider, userid){})
@@ -178,6 +188,11 @@ Called when a user logs in with a provider
 Called when a user has registered - this is called even for OAuth providers when first logging in.
 
 Subsequent connects with Oauth providers do not trigger this event.
+
+
+### gandalf.on('delete', function(userid){})
+
+Called when a user has been deleted
 
 ### gandalf.on('user', function(appid, provider, userid, data){})
 
