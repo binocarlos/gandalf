@@ -3,6 +3,8 @@ gandalf
 
 node.js oauth login wizard with leveldb session storage
 
+[![Travis](http://img.shields.io/travis/binocarlos/gandalf.svg?style=flat)](https://travis-ci.org/binocarlos/gandalf)
+
 ![gandalf gif](http://media.giphy.com/media/njYrp176NQsHS/giphy.gif "gandalf gif")
 
 ## install
