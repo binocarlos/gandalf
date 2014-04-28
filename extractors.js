@@ -36,24 +36,26 @@ var extractors = module.exports = {
 	},
 	twitter:function(provider, packet, done){
 
-		var data = packet.data;
+		var profile = packet.data;
 		var options = {
-			username:data.screen_name,
-			userid:data.user_id,
+			username:profile.screen_name,
+			userid:profile.user_id,
 			oauth_token:packet.token,
 			oauth_secret:packet.secret,
 			consumer_key:provider.id,
 			consumer_secret:provider.secret
 		}
+
 		twitter_profile(options, function(error, twitteruser){
+
 			if(error){
 				return done(error);
 			}
 			
 			done(null, {
-				id:data.user_id,
+				id:profile.user_id,
 				image:twitteruser.profile_image_url,
-				name:data.screen_name
+				name:profile.screen_name
 			});
 		})
 		

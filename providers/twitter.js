@@ -72,28 +72,7 @@ Twitter.prototype.onRequest = function(req, res) {
       data: results
     }
 
-    var options = {
-      username:data.data.screen_name,
-      userid:data.id,
-      oauth_token:data.token,
-      oauth_secret:data.secret,
-      consumer_key:self.id,
-      consumer_secret:self.secret
-    }
-
-    twitter_profile(options, function(error, twitteruser){
-      if(error){
-        return done(error);
-      }
-      
-      data.data = {
-        id:data.id,
-        image:twitteruser.profile_image_url,
-        name:data.screen_name 
-      }
-
-      self.emit("auth", req, res, data)
-    })
+    self.emit("auth", req, res, data)
   }
 }
 

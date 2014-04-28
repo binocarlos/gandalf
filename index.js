@@ -124,41 +124,33 @@ Gandalf.prototype._checkHandler = function(req, res){
 	})
 }
 
-
 Gandalf.prototype._connectHandler = function(req, res, provider, data){
 	var self = this;
 	var installationid = req.installation ? req.installation.id : 'default'
 	req.session.get('userid', function(err, loggedInId){
-		self._db.connect(installationid, loggedInId, req.provider, data, function(err, userid, profile){
+
+		self._db.connect(installationid, loggedInId, req.provider, data, function(err, userid, data){
 			if(err){
 				res.statusCode = 500
 				res.end(err)
 				return
 			}
 			req.session.set('userid', userid, function(){
-				Extractors[name](provider, data, function(err, data){
 
-					console.log('-------------------------------------------');
-					console.log('-------------------------------------------');
-					console.dir('extract');
-					console.dir(data);
+				console.log('-------------------------------------------');
+				console.log('extracting');
+				Extractors[req.provider](provider, data, function(err, profile){
 
-					
-					data.installationid = installationid
-					data.id = userid
+					profile.installationid = installationid
+					profile.id = userid
 					self.emit('save', req.provider, profile)
 					res.redirect('/')
 
-					packet.data = data
-				
 				})
-
-				
 			})
 		})
 	})
 }
-
 
 Gandalf.prototype._registerHandler = function(req, res){
 	var self = this;
@@ -246,7 +238,14 @@ Gandalf.prototype._providerHandler = function(req, res, match){
 	req.provider = match.params.provider
 	
 	this._makeProvider(req.installation, match.params.provider, function(err, provider){
-		provider.emit('request', req, res)
+		if(provider){
+			provider.emit('request', req, res)	
+		}
+		else{
+			res.statusCode = 404
+			res.end('provider: ' + match.params.provider + ' not found')
+		}
+		
 	})
 }
 

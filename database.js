@@ -109,11 +109,7 @@ Database.prototype.connect = function(installationid, loggedInId, provider, data
 		}
 		self.registerUser(installationid, provider, loggedInId, id, null, function(err, dbid){
 			if(err) return done(err)
-			done(null, dbid, {
-				token:token,
-				refreshtoken:refreshtoken,
-				profile:profile
-			})
+			done(null, dbid, data)
 		})	
 	})
 }
