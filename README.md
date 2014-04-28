@@ -13,97 +13,79 @@ $ npm install gandalf
 
 ## usage
 
-The Gandalf auth object emits events when it needs to know things like API tokens and database access.
+You mount a gandalf onto an express/HTTP server and it will deal with OAuth and password based logins.
 
-This lets you handle storage using any Key Value store (e.g. Redis, LevelDB) and to host the authentication for many websites on a single Gandalf server
+It uses leveldb to save sessions and user ids - other data (like profiles) is emitted for you to save how you want.
 
 ```js
 var http = require('http')
 var express = require('express')
-var Gandalf = require('gandalf')
-var db = require('level')('/tmp/gandalfdb')
+var level    = require('level-test')()
+var sublevel = require('level-sublevel')
+var Gandalf = require('../../')
+var ecstatic = require('ecstatic')
+var xtend = require('xtend')
+var fs = require('fs')
+var db = sublevel(level('gandalf-examples--simple', {encoding: 'json'}))
 
 var gandalf = Gandalf(db, {
-	providers:['facebook']
+  providers:{
+    facebook:{
+      id:process.env.FACEBOOK_ID,
+      secret:process.env.FACEBOOK_SECRET
+    },
+    twitter:{
+      id:process.env.TWITTER_ID,
+      secret:process.env.TWITTER_SECRET
+    }
+  }
 })
 
-gandalf.enable('google')
 
-// return an appid from a domain name - this enables virtual hosting
-gandalf.router(function(domain, done){
-	done(null, domain)
+// in memory database for user profile data
+// you can handle this how you want (e.g. other leveldb / Redis etc)
+var users = {}
+
+gandalf.on('save', function(userid, data){
+	var user = users[userid] || {}
+	xtend(user, data)
 })
 
-// return the api keys for a provider in one app (the string return by 'route')
-gandalf.virthost(function(domain, done){
+app = express()
+server = http.createServer(app)
 
-	db.loadInstallation(domain, function(err, installation){
-		done(null, {
-			id:installation.id,
-			providers:{
-				facebook:{
-					id:installation.facebook_id,
-					secret:installation.facebook_secret
-				}
-			}		
-		})
-	})
-	
-})
-
-// create a server and mount the handler anywhere you want
-var app = express()
-var server = http.createServer(app)
-
-// enable sessions for req & res
+// enable sessions
 app.use(gandalf.session())
 
-// enables users to login using '/auth/facebook' for example
+// mount the OAuth login handlers
 app.use('/auth', gandalf.handler())
 
-// protect urls for only logged in users
-app.use('/private', gandalf.protect(), function(req, res, next){
-
-	// all logged in users populate userid inside of the session
-	req.session.get('userid', function(err, userid){
-		res.end(req.session.userid + ' is logged in')
-	})
-	
-	
+// get the current session data
+app.use('/status', function(req, res){
+  req.session.get('userid', function(err, id){
+    var user = users[id] || {}
+    user.id = id;
+    res.end(JSON.stringify(user))
+  })
 })
 
-// protect urls with a custom method
-app.use('/private2', gandalf.protect(function(method, appid, userid, done){
-
-	// method is GET, POST (i.e. HTTP method)
-
-	// run the callback with true or false to indicate access
-	done(null, true)
-
-}), function(req, res, next){
-
-	// all logged in users populate userid inside of the session
-	req.session.get('userid', function(err, userid){
-		res.end(req.session.userid + ' is logged in')
-	})
-	
-	
-})
+app.use('/private', gandalf.protect())
+app.use(ecstatic(__dirname + '/www'))
 
 server.listen(80, function(){
-
+  console.log('server listening');
 })
 ```
 
 ## api
 
-### var gandalf = Gandalf(db, config)
+### var gandalf = Gandalf(db, options)
 
 create a new authentication handler by passing in an existing [leveldb](https://github.com/rvagg/node-levelup) - this can also be a [sub-level](https://github.com/dominictarr/level-sublevel)
 
 The options are:
 
- * providers - an array of provider names that will be `enabled`
+ * providers - an array of provider names that will be enabled
 
 ### gandalf.enable(providername)
 
@@ -116,45 +98,25 @@ Enable a login provider - the supported types are:
  * dropbox
  * twitter
 
-### gandalf.router(function(domain, done){})
+### gandalf.virthost(function(hostname, done){})
 
 This enables virtual hosting (i.e. multiple sets of OAuth keys being used by one gandalf)
 
-The domain used for the request is passed in (e.g. apples.myapp.com) - this function must run the callback with a string representing what app this domain belongs to.
-
-The appid will be used to save user and sessions in a namespace for that app.
+You are provided with the hostname - you should load the oauth details for that hostname and pass them to the callback
 
 ```js
-
-// use whatever logic you want to resolve the domain into an app id
-gandalf.router(function(domain, done){
-	db.loadAppFromDomain(domain, done)
-})
-
-// you can use the domain itself as the appid
-gandalf.router(function(domain, done){
-	done(null, domain)
-})
-```
-
-### gandalf.apikeys(function(appid, provider, done){})
-
-This is also part of the virtual hosting and should return an object with `key` and `secret` properties.
-
-The function will be run with the appid and the name of the provider:
-
-```js
-gandalf.apikeys(function(appid, provider, done){
-	if(provider=='facebook' && domain.match(/myapp\.com$/)){
+gandalf.virthost(function(hostname, done){
+	myDatabase.loadOauthTokens(hostname, function(err, data){
+		if(err) return done(err)
 		done(null, {
-			key:process.env.FACEBOOK_KEY,
-			secret:process.env.FACEBOOK_SECRET
+			providers:{
+				facebook:{
+					id:data.facebook.id,
+					secret:data.facebook.secret
+				}
+			}
 		})
-	}
-	else{
-		// we can load the keys async from an external database
-		databaseObject.getOauthKeys(appid, provider, done)
-	}
+	})
 })
 ```
 
@@ -162,8 +124,7 @@ gandalf.apikeys(function(appid, provider, done){
 
 Return express middleware that will inject a session object unto req and res
 
-
-### gandalf.login()
+### gandalf.handler()
 
 Return express handler that enables logins for users.
 
