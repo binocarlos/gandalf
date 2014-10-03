@@ -33,8 +33,8 @@ function methodFilter(method, fn){
 function Gandalf(db, opts){
 	var self = this;
 	EventEmitter.call(this)
-
 	this._db = new Database(db, opts)
+	
 	this.opts = opts || {
 		providers:{}
 	}
@@ -42,7 +42,7 @@ function Gandalf(db, opts){
 	this._providers = {}
 
 	Object.keys(this.opts.providers || {}).forEach(function(key){
-	  self.enable(key)      
+	  self.enable(key)
 	})
 	
 	this._db.on('batch', function(b){
@@ -59,8 +59,6 @@ function Gandalf(db, opts){
 }
 
 util.inherits(Gandalf, EventEmitter)
-
-module.exports = Gandalf
 
 // get a provider all hooked up with the keys
 Gandalf.prototype._makeProvider = function(installation, name, done){
@@ -297,11 +295,6 @@ Gandalf.prototype._providerHandler = function(req, res, match){
 	})
 }
 
-/*
-
-	PUBLIC API
-	
-*/
 Gandalf.prototype.enable = function(name){
 	if(name){
 		this._providers[name] = ProviderFactory(name)
@@ -329,6 +322,10 @@ Gandalf.prototype.protect = function(){
 			next()
 		})
 	}
+}
+
+Gandalf.prototype.close = function(){
+	this._session.close()
 }
 
 Gandalf.prototype.handler = function(){

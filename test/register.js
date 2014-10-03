@@ -64,6 +64,7 @@ function ServerFactory(done){
 
 function CloseServer(done){
   server.close()
+  gandalf.close()
   done()
 }
 
