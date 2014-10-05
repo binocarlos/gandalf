@@ -21,7 +21,8 @@ It uses leveldb to save sessions and user ids - other data (like profiles) is em
 
 ```js
 var http = require('http')
-var express = require('express')
+var Router = require('routes-router')
+var ware = require('ware')
 var level    = require('level-test')()
 var sublevel = require('level-sublevel')
 var Gandalf = require('../../')
@@ -52,27 +53,34 @@ gandalf.on('save', function(provider, data){
   users[data.id] = user
 })
 
+var router = Router()
+var middleware = ware()
 
-app = express()
-server = http.createServer(app)
+var app = function(req, res){
+	middleware.run(req, res, router)	
+}
 
-// enable sessions
-app.use(gandalf.session())
+// enable sessions for all routes
+middleware.use(gandalf.session())
 
 // mount the OAuth login handlers
-app.use('/auth', gandalf.handler())
+router.addRoute('/auth/*', gandalf.handler())
 
 // get the current session data
-app.use('/status', function(req, res){
-  req.session.get('userid', function(err, id){
-    var user = users[id] || {}
-    user.id = id;
-    res.end(JSON.stringify(user))
-  })
+router.addRoute('/status', {
+	'GET':function(req, res){
+	  req.session.get('userid', function(err, id){
+	    var user = users[id] || {}
+	    user.id = id;
+	    res.end(JSON.stringify(user))
+	  })
+	 }
 })
 
-app.use('/private', gandalf.protect())
-app.use(ecstatic(__dirname + '/www'))
+router.addRoute('/private', gandalf.protect())
+router.addRoute('/*', ecstatic(__dirname + '/www'))
+
+var server = http.createServer(app)
 
 server.listen(80, function(){
   console.log('server listening');
