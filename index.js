@@ -32,6 +32,7 @@ function methodFilter(method, fn){
 
 function Gandalf(db, opts){
 	var self = this;
+	opts = opts || {}
 	EventEmitter.call(this)
 	this._db = new Database(db, opts)
 	
@@ -50,7 +51,7 @@ function Gandalf(db, opts){
 	})
 
 	this._session = LevelSession({
-		db:db
+		db:opts.sessiondb ? opts.sessiondb : db
 	})
 
 	this._httprouter = new Router()
