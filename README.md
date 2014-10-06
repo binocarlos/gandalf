@@ -142,9 +142,9 @@ router.addRoute('/api', gandalf.handler())
 
 The following are the routes that are mounted:
 
-##### GET /<providername>
+##### GET /PROVIDER
 
-e.g. `/auth/google` - this triggers the OAuth login loop for a provider
+e.g. `/google` - this triggers the OAuth login loop for a provider
 
 ##### POST /register
 post username and password and other fields to register a new user
