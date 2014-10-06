@@ -36,9 +36,13 @@ function Gandalf(db, opts){
 	opts = opts || {}
 	EventEmitter.call(this)
 	this._db = new Database(db, opts)
-	this._db.on('storage', function(){
-		self.emit.apply(self, ['storage'].concat(asarray(arguments)))
+	this._db.on('storage:put', function(key, value){
+		self.emit('storage:put', key, value)
 	})
+	this._db.on('storage:batch', function(batch){
+		self.emit('storage:batch', batch)
+	})
+
 	
 	this.opts = opts || {
 		providers:{}
@@ -47,13 +51,9 @@ function Gandalf(db, opts){
 	this._providers = {}
 
 	Object.keys(this.opts.providers || {}).forEach(function(key){
-	  self.enable(key)
+	  self._providers[name] = ProviderFactory(name)
 	})
 	
-	this._db.on('batch', function(b){
-		self.emit('batch', b)
-	})
-
 	this._session = opts.session ? opts.session : LevelSession({
 		db:opts.sessiondb ? opts.sessiondb : db
 	})
@@ -66,15 +66,15 @@ function Gandalf(db, opts){
 util.inherits(Gandalf, EventEmitter)
 
 // get a provider all hooked up with the keys
-Gandalf.prototype._makeProvider = function(installation, name, done){
+Gandalf.prototype._makeProvider = function(name, done){
 	var self = this;
 	
-	var Provider = Providers[name]
+	var Provider = self._providers[name]
 
 	if(!Provider){
 		return done('no provider for: ' + name + ' found')
 	}
-	var config = installation.providers[name]
+	var config = self.opts.providers[name]
 
 	if(!config){
 		return done('no config for ' + name + ' found')
@@ -137,8 +137,7 @@ Gandalf.prototype._statusHandler = function(req, res){
 // set the username for connected users
 Gandalf.prototype._claimHandler = function(req, res){
 	var self = this;
-	var installationid = req.installation ? req.installation.id : 'default'
-
+	
 	req.pipe(concat(function(body){
 
 		body = JSON.parse(body.toString())
@@ -154,15 +153,16 @@ Gandalf.prototype._claimHandler = function(req, res){
 				return
 			}
 
-			self._db.checkUsername(installationid, 'local', username, function(err, ok){
+			self._db.checkUsername('local', username, function(err, ok){
 				if(!ok){
 					res.statusCode = 500
 					res.end('name already taken')
 					self.emit('log:error', 'claim', username + ' already taken')
 				}
 				else{
-					self._db.registerUser(installationid, 'local', loggedInId, username, null, function(err){
+					self._db.registerUser('local', loggedInId, username, null, function(err){
 						self.emit('log', 'claim', username + ' claimed')
+						self.emit('claim', username)
 						res.end('ok')
 					})
 				}
@@ -174,8 +174,7 @@ Gandalf.prototype._claimHandler = function(req, res){
 Gandalf.prototype._checkHandler = function(req, res){
 	var self = this;
 	var query = url.parse(req.url).query
-	var installationid = req.installation ? req.installation.id : 'default'
-	self._db.checkUsername(installationid, 'local', query.username, function(err, ok){
+	self._db.checkUsername('local', query.username, function(err, ok){
 		var val = ok ? 'ok' : 'notok'
 		self.emit('log', 'check', query, val)
 		res.end(val)
@@ -184,8 +183,7 @@ Gandalf.prototype._checkHandler = function(req, res){
 
 Gandalf.prototype._connectHandler = function(req, res, provider, data){
 	var self = this;
-	var installationid = req.installation ? req.installation.id : 'default'
-
+	
 	req.session.get('userid', function(err, loggedInId){
 
 		if(!loggedInId){
@@ -197,7 +195,7 @@ Gandalf.prototype._connectHandler = function(req, res, provider, data){
 
 		self.emit('log', 'connect', loggedInId)
 
-		self._db.connect(installationid, loggedInId, req.provider, data, function(err, userid, data){
+		self._db.connect(loggedInId, req.provider, data, function(err, userid, data){
 			if(err){
 				res.statusCode = 500
 				res.end(err)
@@ -219,7 +217,6 @@ Gandalf.prototype._connectHandler = function(req, res, provider, data){
 						return
 					}
 
-					profile.installationid = installationid
 					profile.id = userid
 					self._db.saveProfile(userid, req.provider, profile, function(err){
 						if(err){
@@ -228,7 +225,7 @@ Gandalf.prototype._connectHandler = function(req, res, provider, data){
 							self.emit('log:error', 'saveprofile', err)
 							return
 						}
-						self.emit('save', installationid, userid, req.provider, profile)
+						self.emit('connect', req.provider, profile)
 						self.emit('log', 'connect:profile', profile)
 						res.redirect('/')
 					})
@@ -240,33 +237,30 @@ Gandalf.prototype._connectHandler = function(req, res, provider, data){
 
 Gandalf.prototype._registerHandler = function(req, res){
 	var self = this;
-	var installationid = req.installation ? req.installation.id : 'default'
 
 	req.pipe(concat(function(body){
 		body = JSON.parse(body.toString())
 		var username = body.username
 		var password = body.password
-		self._db.checkUsername(installationid, 'local', username, function(err, ok){
+		self._db.checkUsername('local', username, function(err, ok){
 			if(!ok){
 				err = 'username already exists'
 			}
 			if(err){
 				res.statusCode = 500
 				res.end(ok ? 'ok' : 'notok')
-				self.emit('log', 'register:error', err)
+				self.emit('log:error', 'register', err)
 				return
 			}
 
 			delete(body.password)
 
-			self._db.registerUser(installationid, 'local', null, username, password, function(err, userid){
+			self._db.registerUser('local', null, username, password, function(err, userid){
 				req.session.set('userid', userid, function(){
-					body.installationid = installationid
 					body.id = userid
-					self._db.saveProfile(userid, req.provider, profile, function(err){
-						
-						self.emit('save', 'local', body)
+					self._db.saveProfile(userid, 'local', body, function(err){
 						self.emit('log', 'register:user', body)
+						self.emit('register', username, body)
 						res.statusCode = 200;
 						res.end('ok')
 					})
@@ -286,8 +280,6 @@ Gandalf.prototype._loginHandler = function(req, res){
 		return
 	}
 
-	var installationid = req.installation ? req.installation.id : 'default'
-
 	req.pipe(concat(function(body){
 
 		body = JSON.parse(body.toString())
@@ -298,21 +290,21 @@ Gandalf.prototype._loginHandler = function(req, res){
 		req.session.get('userid', function(err, id){
 			if(id){
 				res.statusCode = 500
-				self.emit('log', 'login:error', 'already logged in')
+				self.emit('log:error', 'login', 'already logged in')
 				res.end('notok')
 			}
 			else{
-				self._db.checkPassword(installationid, username, password, function(err, userid){
+				self._db.checkPassword(username, password, function(err, userid){
 					if(!userid){
 						err = 'incorrect details'
-						self.emit('log', 'login:error', 'incorrect details')
+						self.emit('log:error', 'login', 'incorrect details')
 					}
 					if(err) return returnError(err)
 					req.session.set('userid', userid, function(err){
 						if(err) return returnError(err)
 						res.statusCode = 200
 						self.emit('log', 'login:ok', username)
-						self.emit('login', installationid, 'local', username)
+						self.emit('login', username)
 						res.end('ok')
 					})
 				})
@@ -326,6 +318,7 @@ Gandalf.prototype._logoutHandler = function(req, res){
 	var self = this;
 	req.session.destroy(function(){
 		self.emit('log', 'logout:ok')
+		self.emit('logout', req)
 		res.redirect('/')
 	})
 }
@@ -333,9 +326,10 @@ Gandalf.prototype._logoutHandler = function(req, res){
 Gandalf.prototype._providerHandler = function(req, res, match){
 	req.provider = match.params.provider
 	
-	this._makeProvider(req.installation, match.params.provider, function(err, provider){
+	this._makeProvider(match.params.provider, function(err, provider){
 		if(provider){
 			self.emit('log', 'provider:request', req.url)
+			self.emit('provider', req.provider, req)
 			provider.emit('request', req, res)	
 		}
 		else{
@@ -346,18 +340,6 @@ Gandalf.prototype._providerHandler = function(req, res, match){
 		}
 		
 	})
-}
-
-Gandalf.prototype.enable = function(name){
-	if(name){
-		this._providers[name] = ProviderFactory(name)
-	}
-	return this
-}
-
-Gandalf.prototype.virthost = function(fn){
-	this._virthost = fn
-	return this
 }
 
 Gandalf.prototype.session = function(){
@@ -371,6 +353,7 @@ Gandalf.prototype.protect = function(){
 				if(err || !id){
 					res.statusCode = 403
 					res.end('not allowed')
+					self.emit('protect', req)
 					return
 				}
 				next()
@@ -386,13 +369,11 @@ Gandalf.prototype.close = function(){
 Gandalf.prototype.handler = function(){
 	var self = this;
 
-	function route(installation, req, res){
-		installation.host = req.headers.host
-		installation.baseurl = req.headers.host + self.opts.path
-		req.installation = installation
+	function route(req, res){
 		var path = url.parse(req.url).pathname
 	  var match = self._httprouter.match(path)
 	  if(match){
+	  	self.emit('request', req)
 	  	match.fn(req, res, match)
 	  }
 	  else{
@@ -402,23 +383,7 @@ Gandalf.prototype.handler = function(){
 	}
 
 	return function(req, res, next){
-		self._session(req, res, function(){
-			if(self._virthost){
-				self._virthost(req.headers.host, function(err, installation){
-					route(installation, req, res)
-				})
-			}
-			else{
-
-				providers = self.opts.providers || {}
-
-				route({
-					id:'default',
-					providers:providers
-				}, req, res)
-			}	
-		})
-		
+		self._session(req, res, route)
 	}
 }
 

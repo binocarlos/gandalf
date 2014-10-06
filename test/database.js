@@ -22,8 +22,19 @@ tape('save a user', function (t) {
   gandalf._db.registerUser('default', 'local', null, 'rodney', 'apples', function(err, id){
     gandalf._db.userId('default', 'local', 'rodney', function(err, loadid){
       t.equal(loadid, id, 'the loaded id is the same as the added id')
-      gandalf.close()
-      t.end()
+
+      gandalf._db.saveProfile(loadid, 'local', {
+        name:'bob'
+      }, function(err){
+        t.error(err, 'save profile')
+        gandalf._db.loadProfile(loadid, function(err, profile){
+          console.log('-------------------------------------------');
+          console.dir(profile)
+          gandalf.close()
+          t.end()    
+        })
+      })
+      
     })
   })
 

@@ -22,12 +22,10 @@ It uses leveldb to save sessions and user ids - other data (like profiles) is em
 ```js
 var http = require('http')
 var Router = require('routes-router')
-var ware = require('ware')
 var level    = require('level-test')()
-var sublevel = require('level-sublevel')
-var Gandalf = require('../../')
+var Gandalf = require('gandalf')
 var ecstatic = require('ecstatic')
-var db = sublevel(level('gandalf-examples--simple', {encoding: 'json'}))
+var db = level('gandalf-examples--simple', {encoding: 'json'})
 
 var gandalf = Gandalf(db, {
   providers:{
@@ -42,45 +40,32 @@ var gandalf = Gandalf(db, {
   }
 })
 
-
-// in memory database for user profile data
-// you can handle this how you want (e.g. other leveldb / Redis etc)
-var users = {}
-
-gandalf.on('save', function(provider, data){
-  var user = users[data.id] || {}
-  user[provider] = data
-  users[data.id] = user
-})
-
 var router = Router()
-var middleware = ware()
-
-var app = function(req, res){
-	middleware.run(req, res, router)	
-}
-
-// enable sessions for all routes
-middleware.use(gandalf.session())
 
 // mount the OAuth login handlers
 router.addRoute('/auth/*', gandalf.handler())
 
 // get the current session data
 router.addRoute('/status', {
-	'GET':function(req, res){
-	  req.session.get('userid', function(err, id){
-	    var user = users[id] || {}
-	    user.id = id;
-	    res.end(JSON.stringify(user))
-	  })
-	 }
+	// add session handler to this method
+	'GET':gandalf.session(function(req, res){
+		req.session.get('userid', function(err, id){
+
+			// load the user from the userid in the session
+			gandalf.loadUser(id, function(err, user){
+				res.end(JSON.stringify(user))	
+			})
+		})
+	})
 })
 
+// only logged in people can see this route
 router.addRoute('/private', gandalf.protect())
+
+// these are served without hitting the session
 router.addRoute('/*', ecstatic(__dirname + '/www'))
 
-var server = http.createServer(app)
+var server = http.createServer(router)
 
 server.listen(80, function(){
   console.log('server listening');
@@ -89,135 +74,187 @@ server.listen(80, function(){
 
 ## api
 
-### var gandalf = Gandalf(db, options)
+#### var gandalf = Gandalf(db, options)
 
 create a new authentication handler by passing in an existing [leveldb](https://github.com/rvagg/node-levelup) - this can also be a [sub-level](https://github.com/dominictarr/level-sublevel)
 
-The options are:
+Pass a `providers` config to activate external OAUTH providers:
 
- * providers - an array of provider names that will be enabled
+```js
+var gandalf = Gandalf(db, {
+  providers:{
+    facebook:{
+      id:process.env.FACEBOOK_ID,
+      secret:process.env.FACEBOOK_SECRET
+    },
+    twitter:{
+      id:process.env.TWITTER_ID,
+      secret:process.env.TWITTER_SECRET
+    }
+  }
+})
+```
 
-### gandalf.enable(providername)
+The supported types are:
 
-Enable a login provider - the supported types are:
-
- * password
  * google
  * facebook
  * github
  * dropbox
  * twitter
 
-### gandalf.virthost(function(hostname, done){})
+Password mode (/register and /login) are activated automatically.
 
-This enables virtual hosting (i.e. multiple sets of OAuth keys being used by one gandalf)
+One user can `connect` multiple external providers and link them to the same user id.
 
-You are provided with the hostname - you should load the oauth details for that hostname and pass them to the callback
+#### gandalf.session()
+
+Return a function that will create a `session` property of the request:
 
 ```js
-gandalf.virthost(function(hostname, done){
-	myDatabase.loadOauthTokens(hostname, function(err, data){
-		if(err) return done(err)
-		done(null, {
-			providers:{
-				facebook:{
-					id:data.facebook.id,
-					secret:data.facebook.secret
-				}
-			}
+var session = gandalf.session()
+
+router.addRoute('/api', function(req, res){
+	session(req, res, function(){
+
+		// we now have a session for the request
+		req.session.get('userid', function(err, userid){
+
 		})
 	})
 })
 ```
 
-### gandalf.session()
-
-Return express middleware that will inject a session object unto req and res
-
-### gandalf.handler()
-
-Return express handler that enables logins for users.
-
-This handle can be mounted onto the host express application where you want.
-
- * GET /<providername> - e.g. /auth/google - this triggers the OAuth login loop for a provider
- * POST /register - post username and password and other fields to register a new user
- * POST /login - post username and password fields to login using the password method
- * POST /claim - post a username to use for a connected user
- * GET /logout - clear the session and redirect to '/'
- * GET /check?username=<username> - check if the given username exists
- * GET /status - return a JSON representation of the current session - this includes OAuth tokens
-
-### gandalf.protect(function(req, appid, userid, done){})
-
-Return express middleware that will protect resources further down the chain.
-
-If you pass a function it is used to decide on access for the request - the request itself plus the `appid` and `userid` are passed.
-
-Run the callback with either true or false to indicate access:
+You can also pass a function to gandalf.session and it will be wrapped:
 
 ```js
-app.use('/private2', gandalf.protect(function(method, appid, userid, done){
+router.addRoute('/api', gandalf.session(function(req, res){
+	//req.session is populated
+}))
+```
 
-	// method is GET, POST (i.e. HTTP method)
+#### gandalf.handler()
 
-	// run the callback with true or false to indicate access
-	done(null, true)
+Mount the authentication handler onto an endpoint of your application (for example on `/auth`).
 
-}), function(req, res, next){
+You can then link to `/auth/github` to perform a github login or POST to `/auth/register` to register new accounts.
 
-	// all logged in users populate userid inside of the session
-	req.session.get('userid', function(err, userid){
-		res.end(req.session.userid + ' is logged in')
-	})
-	
-	
-})
+```js
+router.addRoute('/api', gandalf.handler())
+```
+
+The following are the routes that are mounted:
+
+##### GET /<providername>
+
+e.g. `/auth/google` - this triggers the OAuth login loop for a provider
+
+##### POST /register
+post username and password and other fields to register a new user
+
+```json
+{
+	"username":"bob",
+	"password":"123",
+	"email":"bob@bob.com",
+	"likes":"porridge"
+}
+```
+
+##### POST /login
+post username and password fields to login using the password method
+
+```json
+{
+	"username":"bob",
+	"password":"123"
+}
+```
+
+##### POST /claim
+post a username to use for a connected user - use this when a user connects using an external service but you still need a `username` (as opposed to just an id)
+
+```json
+{
+	"username":"bob"
+}
+```
+
+##### GET /logout
+clear the session and redirect to '/'
+
+##### GET /check?username=<username>
+check if the given username exists
+
+##### GET /status
+return a JSON representation of the current session - this includes OAuth tokens
+
+#### gandalf.protect(function(req, appid, userid, done){})
+
+Return a 403 error if the user is not logged in:
+
+```js
+router.addRoute('/private', gandalf.protect(function(req, res){
+	// the user is logged in
+	// we also have req.session and req.userid
+}))
 ```
 
 If you do not pass a function then there just needs to be a user for access to be granted.
 
-### gandalf.delete(id, function(){})
+#### gandalf.delete(id, function(){})
 
 Delete a user and all their details
 
-### gandalf.disconnect(id, provider, function(){})
+#### gandalf.disconnect(id, provider, function(){})
 
 Remove the connection details for 'provider' in the given user
 
 ## events
 
-### gandalf.on('save', function(appid, provider, userid){})
+#### gandalf.on('storage:put', function(key, value){})
 
-Called when a user logs in with the password provider
+When a value has been put to the database
 
-### gandalf.on('login', function(appid, provider, userid){})
+#### gandalf.on('storage:batch', function(key, value){})
 
-Called when a user logs in with the password provider
+When a batch has been sent to the database
 
+#### gandalf.on('request', function(req){})
 
-### gandalf.on('login', function(appid, provider, userid){})
+A HTTP request has hit the handler
 
-Called when a user logs in with the password provider
+#### gandalf.on('provider', function(name, req){})
 
-### gandalf.on('register', function(appid, provider, userid){})
+A HTTP request has hit a provider handler
 
-Called when a user registers with the password provider
+#### gandalf.on('protect', function(req){})
 
-### gandalf.on('connect', function(appid, provider, userid){})
+A resource has been denied in a protect handler
 
-Called when a user connects with an OAuth provider
+#### gandalf.on('login', function(username){})
 
+A login request
 
-### gandalf.on('delete', function(userid){})
+#### gandalf.on('register', function(username, body){})
 
-Called when a user has been deleted
+A register request
 
-### gandalf.on('user', function(appid, provider, userid, data){})
+#### gandalf.on('connect', function(provider, profile){})
 
-Called when there is profile data to save for a user - this is returned from the OAuth providers and from extra fields in the register form.
+A connect request
 
-Save the data however you want - the name of the provider that generated the data is passed along with the primary key (userid) and the data object itself.
+#### gandalf.on('claim', function(username){})
+
+A claim request
+
+#### gandalf.on('logout', function(req){})
+
+A logout request
+
+#### gandalf.on('log', function(type, message){})
+
+#### gandalf.on('log:error', function(type, message){})
 
 ## license
 

@@ -19,17 +19,17 @@ module.exports = Database
 // default~user~local~binocarlos = 123-123-123
 // default~password~123-123-123 = DjhkdfjKHJNdfkhDf
 // default~links~123-123-123-local-binocarlos = 123-123-123
-Database.prototype.registerUser = function(installationid, provider, userid, username, password, done){
+Database.prototype.registerUser = function(provider, userid, username, password, done){
 	var self = this;
 	var id = userid || uuid.v1()
 
 	function makekey(arr){
-		return [installationid].concat(arr).join('~')
+		return arr.join('~')
 	}
 
 	function runbatch(batch){
 		self._db.batch(batch, function(err){
-			self.emit('batch', batch)
+			self.emit('storage:batch', batch)
 			done(err, id)
 		})
 	}
@@ -60,13 +60,13 @@ Database.prototype.registerUser = function(installationid, provider, userid, use
 	}
 }
 
-Database.prototype.userId = function(installationid, provider, username, done){
-	var key = [installationid, 'user', provider, username].join('~')
+Database.prototype.userId = function(provider, username, done){
+	var key = ['user', provider, username].join('~')
 	this._db.get(key, done)
 }
 
-Database.prototype.checkUsername = function(installationid, provider, username, done){
-	this.userId(installationid, provider, username, function(err, id){
+Database.prototype.checkUsername = function(provider, username, done){
+	this.userId(provider, username, function(err, id){
 		if(err || !id){
 			done(null, true)
 		}
@@ -76,22 +76,22 @@ Database.prototype.checkUsername = function(installationid, provider, username, 
 	})
 }
 
-Database.prototype.loadPassword = function(installationid, username, done){
+Database.prototype.loadPassword = function(username, done){
 	var self = this;
-	this.userId(installationid, 'local', username, function(err, id){
+	this.userId('local', username, function(err, id){
 		if(!err && !id){
-			err = 'no id found for username: ' + installation + ' -> ' + username
+			err = 'no id found for username: ' + username
 		}
 		if(err) return done(err)
-		var key = [installationid, 'password', id].join('~')
+		var key = ['password', id].join('~')
 		self._db.get(key, done)
 	})
 }
 
 // local provider only
-Database.prototype.checkPassword = function(installationid, username, password, done){
+Database.prototype.checkPassword = function(username, password, done){
 	var self = this;
-	self.loadPassword(installationid, username, function(err, dbpassword){
+	self.loadPassword(username, function(err, dbpassword){
 		utils.comparePassword(password, dbpassword, done)
 	})
 }
@@ -119,11 +119,12 @@ Database.prototype.saveProfile = function(userid, provider, data, done){
 		if(err) return done(err)
 		profile[provider] = data
 		var key = ['profile', userid].join('~')
+		self.emit('storage:put', key, JSON.stringify(profile))
 		self._db.put(key, JSON.stringify(profile), done)
 	})
 }
 
-Database.prototype.connect = function(installationid, loggedInId, provider, data, done){
+Database.prototype.connect = function(loggedInId, provider, data, done){
 
 	var self = this;
 	var profile = data.data
@@ -131,12 +132,12 @@ Database.prototype.connect = function(installationid, loggedInId, provider, data
 	var token = data.token
 	var refreshtoken = data.refresh_token
 
-	self.userId(installationid, provider, id, function(err, userid){
+	self.userId(provider, id, function(err, userid){
 		if(loggedInId && userid && userid!=loggedInId){
 			// the account is linked to another user
 			return done('this account is linked to another user')
 		}
-		self.registerUser(installationid, provider, loggedInId, id, null, function(err, dbid){
+		self.registerUser(provider, loggedInId, id, null, function(err, dbid){
 			if(err) return done(err)
 			done(null, dbid, data)
 		})	
