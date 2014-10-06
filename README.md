@@ -187,15 +187,26 @@ Remove the connection details for 'provider' in the given user
 
 ## events
 
+### gandalf.on('save', function(appid, provider, userid){})
+
+Called when a user logs in with the password provider
+
 ### gandalf.on('login', function(appid, provider, userid){})
 
-Called when a user logs in with a provider
+Called when a user logs in with the password provider
+
+
+### gandalf.on('login', function(appid, provider, userid){})
+
+Called when a user logs in with the password provider
 
 ### gandalf.on('register', function(appid, provider, userid){})
 
-Called when a user has registered - this is called even for OAuth providers when first logging in.
+Called when a user registers with the password provider
 
-Subsequent connects with Oauth providers do not trigger this event.
+### gandalf.on('connect', function(appid, provider, userid){})
+
+Called when a user connects with an OAuth provider
 
 
 ### gandalf.on('delete', function(userid){})

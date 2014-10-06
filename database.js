@@ -15,8 +15,10 @@ util.inherits(Database, EventEmitter)
 
 module.exports = Database
 
+// default~profile~123-123-123 = {..}
 // default~user~local~binocarlos = 123-123-123
 // default~password~123-123-123 = DjhkdfjKHJNdfkhDf
+// default~links~123-123-123-local-binocarlos = 123-123-123
 Database.prototype.registerUser = function(installationid, provider, userid, username, password, done){
 	var self = this;
 	var id = userid || uuid.v1()
@@ -91,6 +93,33 @@ Database.prototype.checkPassword = function(installationid, username, password, 
 	var self = this;
 	self.loadPassword(installationid, username, function(err, dbpassword){
 		utils.comparePassword(password, dbpassword, done)
+	})
+}
+
+Database.prototype.loadProfile = function(userid, done){
+	var self = this;
+	var key = ['profile', userid].join('~')
+	self._db.get(key, function(err, profile){
+		if(err) return done(err)
+		if(!profile){
+			profile = {
+				id:userid
+			}
+		}
+		if(typeof(profile)==='string'){
+			profile = JSON.parse(profile)
+		}
+		done(null, profile)
+	})
+}
+
+Database.prototype.saveProfile = function(userid, provider, data, done){
+	var self = this;
+	self.loadProfile(userid, function(err, profile){
+		if(err) return done(err)
+		profile[provider] = data
+		var key = ['profile', userid].join('~')
+		self._db.put(key, JSON.stringify(profile), done)
 	})
 }
 

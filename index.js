@@ -1,6 +1,7 @@
 var url = require('url')
 var EventEmitter = require('events').EventEmitter
 var util = require('util')
+var asarray = require('as-array')
 var Router = require('routes')
 var concat = require('concat-stream')
 var LevelSession = require('level-session')
@@ -35,6 +36,9 @@ function Gandalf(db, opts){
 	opts = opts || {}
 	EventEmitter.call(this)
 	this._db = new Database(db, opts)
+	this._db.on('storage', function(){
+		self.emit.apply(self, ['storage'].concat(asarray(arguments)))
+	})
 	
 	this.opts = opts || {
 		providers:{}
@@ -146,7 +150,7 @@ Gandalf.prototype._claimHandler = function(req, res){
 			if(err || !loggedInId){
 				res.statusCode = 403
 				res.end('must be logged in')
-				self.emit('log', 'claim', 'user not logged in')
+				self.emit('log:error', 'claim', 'user not logged in')
 				return
 			}
 
@@ -154,7 +158,7 @@ Gandalf.prototype._claimHandler = function(req, res){
 				if(!ok){
 					res.statusCode = 500
 					res.end('name already taken')
-					self.emit('log', 'claim', username + ' already taken')
+					self.emit('log:error', 'claim', username + ' already taken')
 				}
 				else{
 					self._db.registerUser(installationid, 'local', loggedInId, username, null, function(err){
@@ -186,8 +190,8 @@ Gandalf.prototype._connectHandler = function(req, res, provider, data){
 
 		if(!loggedInId){
 			res.statusCode = 500
-			res.end('no logged in')
-			self.emit('log', 'connect:error', 'not logged in')
+			res.end('not logged in')
+			self.emit('log:error', 'connect', 'not logged in')
 			return
 		}
 
@@ -197,19 +201,37 @@ Gandalf.prototype._connectHandler = function(req, res, provider, data){
 			if(err){
 				res.statusCode = 500
 				res.end(err)
-				self.emit('log', 'connect:error', err)
+				self.emit('log:error', 'connect', err)
 				return
 			}
 			req.session.set('userid', userid, function(){
-
+				if(err){
+					res.statusCode = 500
+					res.end(err)
+					self.emit('log:error', 'session', err)
+					return
+				}
 				Extractors[req.provider](provider, data, function(err, profile){
+					if(err){
+						res.statusCode = 500
+						res.end(err)
+						self.emit('log:error', 'extractor', err)
+						return
+					}
 
 					profile.installationid = installationid
 					profile.id = userid
-					self.emit('save', req.provider, profile)
-					self.emit('log', 'connect:profile', profile)
-					res.redirect('/')
-
+					self._db.saveProfile(userid, req.provider, profile, function(err){
+						if(err){
+							res.statusCode = 500
+							res.end(err)
+							self.emit('log:error', 'saveprofile', err)
+							return
+						}
+						self.emit('save', installationid, userid, req.provider, profile)
+						self.emit('log', 'connect:profile', profile)
+						res.redirect('/')
+					})
 				})
 			})
 		})
@@ -241,10 +263,13 @@ Gandalf.prototype._registerHandler = function(req, res){
 				req.session.set('userid', userid, function(){
 					body.installationid = installationid
 					body.id = userid
-					self.emit('save', 'local', body)
-					self.emit('log', 'register:user', body)
-					res.statusCode = 200;
-					res.end('ok')
+					self._db.saveProfile(userid, req.provider, profile, function(err){
+						
+						self.emit('save', 'local', body)
+						self.emit('log', 'register:user', body)
+						res.statusCode = 200;
+						res.end('ok')
+					})
 				})
 				
 			})
@@ -287,6 +312,7 @@ Gandalf.prototype._loginHandler = function(req, res){
 						if(err) return returnError(err)
 						res.statusCode = 200
 						self.emit('log', 'login:ok', username)
+						self.emit('login', installationid, 'local', username)
 						res.end('ok')
 					})
 				})
@@ -340,13 +366,15 @@ Gandalf.prototype.session = function(){
 
 Gandalf.prototype.protect = function(){
 	return function(req, res, next){
-		req.session.get('userid', function(err, id){
-			if(err || !id){
-				res.statusCode = 403
-				res.end('not allowed')
-				return
-			}
-			next()
+		self._session(req, res, function(){
+			req.session.get('userid', function(err, id){
+				if(err || !id){
+					res.statusCode = 403
+					res.end('not allowed')
+					return
+				}
+				next()
+			})
 		})
 	}
 }
@@ -374,20 +402,23 @@ Gandalf.prototype.handler = function(){
 	}
 
 	return function(req, res, next){
-		if(self._virthost){
-			self._virthost(req.headers.host, function(err, installation){
-				route(installation, req, res)
-			})
-		}
-		else{
+		self._session(req, res, function(){
+			if(self._virthost){
+				self._virthost(req.headers.host, function(err, installation){
+					route(installation, req, res)
+				})
+			}
+			else{
 
-			providers = self.opts.providers || {}
+				providers = self.opts.providers || {}
 
-			route({
-				id:'default',
-				providers:providers
-			}, req, res)
-		}
+				route({
+					id:'default',
+					providers:providers
+				}, req, res)
+			}	
+		})
+		
 	}
 }
 
