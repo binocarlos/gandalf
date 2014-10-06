@@ -28,8 +28,8 @@ tape('save a user', function (t) {
       }, function(err){
         t.error(err, 'save profile')
         gandalf._db.loadProfile(loadid, function(err, profile){
-          console.log('-------------------------------------------');
-          console.dir(profile)
+          t.equal(profile.id, loadid, 'id=loadid')
+          t.equal(profile.local.name, 'bob', 'name is bob')
           gandalf.close()
           t.end()    
         })
