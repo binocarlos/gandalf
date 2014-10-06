@@ -50,7 +50,7 @@ function Gandalf(db, opts){
 		self.emit('batch', b)
 	})
 
-	this._session = LevelSession({
+	this._session = opts.session ? opts.session : LevelSession({
 		db:opts.sessiondb ? opts.sessiondb : db
 	})
 
