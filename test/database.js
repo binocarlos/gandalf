@@ -19,8 +19,8 @@ gandalf.on('batch', function(b){
 
 tape('save a user', function (t) {
 
-  gandalf._db.registerUser('default', 'local', null, 'rodney', 'apples', function(err, id){
-    gandalf._db.userId('default', 'local', 'rodney', function(err, loadid){
+  gandalf._db.registerUser('local', null, 'rodney', 'apples', function(err, id){
+    gandalf._db.userId('local', 'rodney', function(err, loadid){
       t.equal(loadid, id, 'the loaded id is the same as the added id')
 
       gandalf._db.saveProfile(loadid, 'local', {

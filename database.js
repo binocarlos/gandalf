@@ -20,6 +20,7 @@ module.exports = Database
 // default~password~123-123-123 = DjhkdfjKHJNdfkhDf
 // default~links~123-123-123-local-binocarlos = 123-123-123
 Database.prototype.registerUser = function(provider, userid, username, password, done){
+
 	var self = this;
 	var id = userid || uuid.v1()
 
@@ -116,7 +117,11 @@ Database.prototype.loadProfile = function(userid, done){
 Database.prototype.saveProfile = function(userid, provider, data, done){
 	var self = this;
 	self.loadProfile(userid, function(err, profile){
-		if(err) return done(err)
+		if(!profile){
+			profile = {
+				id:userid
+			}
+		}
 		profile[provider] = data
 		var key = ['profile', userid].join('~')
 		self.emit('storage:put', key, JSON.stringify(profile))
