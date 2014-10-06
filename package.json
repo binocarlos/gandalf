@@ -1,6 +1,6 @@
 {
   "name": "gandalf",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "node.js oauth login wizard with leveldb session storage",
   "main": "index.js",
   "scripts": {
