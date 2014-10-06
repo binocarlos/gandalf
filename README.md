@@ -15,10 +15,6 @@ $ npm install gandalf
 
 ## usage
 
-You mount a gandalf onto an express/HTTP server and it will deal with OAuth and password based logins.
-
-It uses leveldb to save sessions and user ids - other data (like profiles) is emitted for you to save how you want.
-
 ```js
 var http = require('http')
 var Router = require('routes-router')
