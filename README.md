@@ -22,6 +22,7 @@ It uses leveldb to save sessions and user ids - other data (like profiles) is em
 ```js
 var http = require('http')
 var Router = require('routes-router')
+var mount = require('routes-router-mount')
 var level    = require('level-test')()
 var Gandalf = require('gandalf')
 var ecstatic = require('ecstatic')
@@ -40,10 +41,10 @@ var gandalf = Gandalf(db, {
   }
 })
 
-var router = Router()
+var router = mount(Router())
 
 // mount the OAuth login handlers
-router.addRoute('/auth/*', gandalf.handler())
+router.mount('/auth', gandalf.handler())
 
 // get the current session data
 router.addRoute('/status', {
