@@ -2,11 +2,10 @@ var url = require('url')
 var EventEmitter = require('events').EventEmitter
 var util = require('util')
 var asarray = require('as-array')
-var Router = require('routes')
+var Router = require('routes-router')
 var concat = require('concat-stream')
 var LevelSession = require('level-session')
 var Database = require('./database')
-var Extractors = require('./extractors')
 
 // keep a log of the Provider classes
 var Providers = {}
@@ -21,14 +20,9 @@ function ProviderFactory(name){
 }
 
 function methodFilter(method, fn){
-	return function(req, res, match){
-		if(req.method.toLowerCase()!=method){
-			res.statusCode = 404
-			res.end('route not found')
-			return
-		}
-		fn(req, res, match)
-	}
+	var ret = {}
+	ret[method.toUpperCase()] = fn
+	return ret
 }
 
 function Gandalf(db, opts){
@@ -135,219 +129,37 @@ Gandalf.prototype._statusHandler = function(req, res){
 }
 
 // set the username for connected users
-Gandalf.prototype._claimHandler = function(req, res){
+Gandalf.prototype._claimHandler = require('./handlers/claim')
+
+Gandalf.prototype._checkHandler = require('./handlers/check')
+
+Gandalf.prototype._connectHandler = require('./handlers/connect')
+
+Gandalf.prototype._registerHandler = require('./handlers/register')
+
+Gandalf.prototype._loginHandler = require('./handlers/login')
+
+Gandalf.prototype._logoutHandler = require('./handlers/logout')
+
+Gandalf.prototype._providerHandler = require('./handlers/provider')
+
+Gandalf.prototype.session = function(fn){
 	var self = this;
-	
-	req.pipe(concat(function(body){
-
-		body = JSON.parse(body.toString())
-		
-		var username = body.username
-
-		req.session.get('userid', function(err, loggedInId){
-
-			if(err || !loggedInId){
-				res.statusCode = 403
-				res.end('must be logged in')
-				self.emit('log:error', 'claim', 'user not logged in')
-				return
-			}
-
-			self._db.checkUsername('local', username, function(err, ok){
-				if(!ok){
-					res.statusCode = 500
-					res.end('name already taken')
-					self.emit('log:error', 'claim', username + ' already taken')
-				}
-				else{
-					self._db.registerUser('local', loggedInId, username, null, function(err){
-						self.emit('log', 'claim', username + ' claimed')
-						self.emit('claim', username)
-						res.end('ok')
-					})
-				}
+	if(fn){
+		return function(req, res){
+			self._session(req, res, function(){
+				fn(req, res)
 			})
-		})
-	}))
-}
-
-Gandalf.prototype._checkHandler = function(req, res){
-	var self = this;
-	var query = url.parse(req.url).query
-	self._db.checkUsername('local', query.username, function(err, ok){
-		var val = ok ? 'ok' : 'notok'
-		self.emit('log', 'check', query, val)
-		res.end(val)
-	})
-}
-
-Gandalf.prototype._connectHandler = function(req, res, provider, data){
-	var self = this;
-	
-	req.session.get('userid', function(err, loggedInId){
-
-		if(!loggedInId){
-			res.statusCode = 500
-			res.end('not logged in')
-			self.emit('log:error', 'connect', 'not logged in')
-			return
 		}
-
-		self.emit('log', 'connect', loggedInId)
-
-		self._db.connect(loggedInId, req.provider, data, function(err, userid, data){
-			if(err){
-				res.statusCode = 500
-				res.end(err)
-				self.emit('log:error', 'connect', err)
-				return
-			}
-			req.session.set('userid', userid, function(){
-				if(err){
-					res.statusCode = 500
-					res.end(err)
-					self.emit('log:error', 'session', err)
-					return
-				}
-				Extractors[req.provider](provider, data, function(err, profile){
-					if(err){
-						res.statusCode = 500
-						res.end(err)
-						self.emit('log:error', 'extractor', err)
-						return
-					}
-
-					profile.id = userid
-					self._db.saveProfile(userid, req.provider, profile, function(err){
-						if(err){
-							res.statusCode = 500
-							res.end(err)
-							self.emit('log:error', 'saveprofile', err)
-							return
-						}
-						self.emit('connect', req.provider, profile)
-						self.emit('log', 'connect:profile', profile)
-						res.redirect('/')
-					})
-				})
-			})
-		})
-	})
-}
-
-Gandalf.prototype._registerHandler = function(req, res){
-	var self = this;
-
-	req.pipe(concat(function(body){
-		body = JSON.parse(body.toString())
-		var username = body.username
-		var password = body.password
-		self._db.checkUsername('local', username, function(err, ok){
-			if(!ok){
-				err = 'username already exists'
-			}
-			if(err){
-				res.statusCode = 500
-				res.end(ok ? 'ok' : 'notok')
-				self.emit('log:error', 'register', err)
-				return
-			}
-
-			delete(body.password)
-
-			self._db.registerUser('local', null, username, password, function(err, userid){
-				req.session.set('userid', userid, function(){
-					body.id = userid
-					self._db.saveProfile(userid, 'local', body, function(err){
-						self.emit('log', 'register:user', body)
-						self.emit('register', username, body)
-						res.statusCode = 200;
-						res.end('ok')
-					})
-				})
-				
-			})
-		})
-	}))
-}
-
-Gandalf.prototype._loginHandler = function(req, res){
-	var self = this;
-
-	function returnError(e){
-		res.statusCode = 500
-		res.end(e.toString())
-		return
 	}
-
-	req.pipe(concat(function(body){
-
-		body = JSON.parse(body.toString())
-
-		var username = body.username
-		var password = body.password
-
-		req.session.get('userid', function(err, id){
-			if(id){
-				res.statusCode = 500
-				self.emit('log:error', 'login', 'already logged in')
-				res.end('notok')
-			}
-			else{
-				self._db.checkPassword(username, password, function(err, userid){
-					if(!userid){
-						err = 'incorrect details'
-						self.emit('log:error', 'login', 'incorrect details')
-					}
-					if(err) return returnError(err)
-					req.session.set('userid', userid, function(err){
-						if(err) return returnError(err)
-						res.statusCode = 200
-						self.emit('log', 'login:ok', username)
-						self.emit('login', username)
-						res.end('ok')
-					})
-				})
-			}
-		})
-
-	}))
+	else{
+		return this._session	
+	}
 }
 
-Gandalf.prototype._logoutHandler = function(req, res){
+Gandalf.prototype.protect = function(fn){
 	var self = this;
-	req.session.destroy(function(){
-		self.emit('log', 'logout:ok')
-		self.emit('logout', req)
-		res.redirect('/')
-	})
-}
-
-Gandalf.prototype._providerHandler = function(req, res, match){
-	req.provider = match.params.provider
-	
-	this._makeProvider(match.params.provider, function(err, provider){
-		if(provider){
-			self.emit('log', 'provider:request', req.url)
-			self.emit('provider', req.provider, req)
-			provider.emit('request', req, res)	
-		}
-		else{
-			res.statusCode = 404
-			var err = 'provider: ' + match.params.provider + ' not found'
-			self.emit('log', 'provider:error', err)
-			res.end(err)
-		}
-		
-	})
-}
-
-Gandalf.prototype.session = function(){
-	return this._session
-}
-
-Gandalf.prototype.protect = function(){
-	return function(req, res, next){
+	return function(req, res){
 		self._session(req, res, function(){
 			req.session.get('userid', function(err, id){
 				if(err || !id){
@@ -356,7 +168,7 @@ Gandalf.prototype.protect = function(){
 					self.emit('protect', req)
 					return
 				}
-				next()
+				fn(req, res)
 			})
 		})
 	}
@@ -369,21 +181,10 @@ Gandalf.prototype.close = function(){
 Gandalf.prototype.handler = function(){
 	var self = this;
 
-	function route(req, res){
-		var path = url.parse(req.url).pathname
-	  var match = self._httprouter.match(path)
-	  if(match){
-	  	self.emit('request', req)
-	  	match.fn(req, res, match)
-	  }
-	  else{
-	  	res.statusCode = 404
-	  	res.end(req.url + ' not found')
-	  }
-	}
-
-	return function(req, res, next){
-		self._session(req, res, route)
+	return function(req, res){
+		self._session(req, res, function(){
+			self._httprouter(req, res)
+		})
 	}
 }
 

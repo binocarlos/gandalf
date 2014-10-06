@@ -1,8 +1,9 @@
 var http = require('http')
-var express = require('express')
 var level    = require('level-test')()
 var sublevel = require('level-sublevel')
 var Gandalf = require('../')
+var Router = require('routes-router')
+var mount = require('routes-router-mount')
 var ecstatic = require('ecstatic')
 var fs = require('fs')
 var util = require('util')
@@ -19,30 +20,49 @@ var serverState = {}
 function ServerFactory(done){
   gandalf = Gandalf(db)
 
-  gandalf.on('batch', function(b){
+  gandalf.on('log', function(type, message){
+    console.log('log:' + type + ' ' + message)
+  })
+
+  gandalf.on('log:error', function(type, message){
+    console.error('log:error:' + type + ' ' + message)
+  })
+
+  gandalf.on('storage:batch', function(b){
     console.log('-------------------------------------------')
     console.log('batch')
     console.dir(b)
   })
 
-  gandalf.on('save', function(userid, data){
+  gandalf.on('storage:put', function(key, value){
+    console.log('-------------------------------------------')
+    console.log('put')
+    console.dir(key)
+    console.dir(value)
+  })
+
+
+  gandalf.on('save', function(userid, provider, data){
+    console.log('-------------------------------------------');
+    console.log('save')
+    console.dir(userid)
+    console.dir(provider)
+    console.dir(data)
     serverState.savedUser = data
   })
 
-  // create a server and mount the handler anywhere you want
-  app = express()
+  app = mount(Router())
+
   server = http.createServer(app)
 
-  // enable sessions for req & res
-  app.use(gandalf.session())
-
   // enables users to login using '/auth/facebook' for example
-  app.use('/auth', gandalf.handler())
+  var handler = gandalf.handler()
+  app.mount('/auth', gandalf.handler())
 
-  app.use('/private', gandalf.protect())
+  app.addRoute('/private/*', gandalf.protect(ecstatic(__dirname + '/www')))
   
   // the logged in or not branch
-  app.get('/', function(req, res){
+  app.addRoute('/', gandalf.session(function(req, res){
     res.setHeader('Content-Type', 'text/html')
     req.session.get('userid', function(err, id){
       if(!err && id){
@@ -52,9 +72,9 @@ function ServerFactory(done){
         fs.createReadStream(__dirname + '/www/index.html').pipe(res)
       }
     })
-  })
+  }))
 
-  app.use(ecstatic(__dirname + '/www'))
+  app.addRoute('/*', ecstatic(__dirname + '/www'))
 
   server.listen(8089, function(){
     console.log('server listening');
@@ -105,6 +125,7 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
 
   tape('register new account', function (t) {
 
+
     var browserState = {}
     tape.browser
       .goto('http://127.0.0.1:8089')
@@ -117,9 +138,9 @@ NightmareTape(ServerFactory, CloseServer, function(err, tape){
         browserState.reply = val
       })
       .run(function (err, nightmare) {
+        
         t.equal(serverState.savedUser.username, 'rodney')
         t.equal(serverState.savedUser.email, 'rodney@test.com')
-        t.equal(serverState.savedUser.installationid, 'default')
         t.equal(browserState.reply, 'ok')
         t.end()
       });

@@ -244,6 +244,10 @@ A register request
 
 A connect request
 
+#### gandalf.on('save', function(id, provider, profile){})
+
+A user profile has been created by `provider`
+
 #### gandalf.on('claim', function(username){})
 
 A claim request

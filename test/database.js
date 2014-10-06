@@ -10,10 +10,17 @@ var app
 
 var gandalf = Gandalf(db)
 
-gandalf.on('batch', function(b){
+gandalf.on('storage:batch', function(b){
   console.log('-------------------------------------------')
   console.log('batch')
   console.dir(b)
+})
+
+gandalf.on('storage:put', function(key, value){
+  console.log('-------------------------------------------')
+  console.log('put')
+  console.dir(key)
+  console.dir(value)
 })
 
 

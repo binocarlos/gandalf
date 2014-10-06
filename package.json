@@ -27,10 +27,10 @@
   "homepage": "https://github.com/binocarlos/gandalf",
   "devDependencies": {
     "ecstatic": "^0.5.1",
-    "express": "^4.1.0",
     "level-sublevel": "^5.2.0",
     "level-test": "^1.6.2",
     "nightmare-tape": "^0.1.0",
+    "routes-router-mount": "^0.1.0",
     "tape": "^2.12.3"
   },
   "dependencies": {
@@ -41,7 +41,8 @@
     "level-session": "^0.3.1",
     "node-uuid": "^1.4.1",
     "oauth": "^0.9.11",
-    "routes": "^1.1.0",
+    "predirect": "^1.0.0",
+    "routes-router": "^4.1.1",
     "twitter-profile": "0.0.1"
   }
 }
