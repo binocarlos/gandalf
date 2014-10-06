@@ -119,14 +119,7 @@ Gandalf.prototype._addRoutes = function(name){
 }
 
 
-Gandalf.prototype._statusHandler = function(req, res){
-	var self = this;
-	req.session.get('userid', function(err, id){
-    var user = users[id] || {}
-    user.id = id;
-    res.end(JSON.stringify(user))
-  })
-}
+Gandalf.prototype._statusHandler = require('./handlers/status')
 
 // set the username for connected users
 Gandalf.prototype._claimHandler = require('./handlers/claim')
